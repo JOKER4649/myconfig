@@ -2,12 +2,10 @@
   "$schema": "https://opencode.ai/config.json",
   "plugin": [
     "oh-my-opencode@latest",
-    // "opencode-anthropic-auth@latest",
-    // "@plannotator/opencode@latest"
+    "@franlol/opencode-md-table-formatter@latest"
   ],
   "autoupdate": true,
-  "default_agent": "plan",
-  "model": "anthropic/claude-opus-4-5",
+  "model": "anthropic/claude-sonnet-4-6", // 預設模型
   "small_model": "zai-coding-plan/glm-4.7", // 可選的小模型
   "permission": {
     "bash": {
@@ -38,18 +36,6 @@
         "google-ai-studio/gemini-3-flash-preview": {},
         "google-ai-studio/gemini-3-pro-preview": {}
       }
-    }
-  },
-  "keybinds": {
-    // alt+enter 提交輸入，enter 換行
-    // "input_submit": "alt+return",
-    // "input_newline": "return"
-  },
-  "tui": {
-    "scroll_speed": 3,
-    // 類似 macOS 的平滑滾動
-    "scroll_acceleration": {
-      "enabled": true
     }
   }
 }
