@@ -1,0 +1,21 @@
+"$schema" = 'https://starship.rs/config-schema.json'
+
+[memory_usage]
+disabled = false
+threshold = -1
+
+[localip]
+#disabled = false
+
+[mise]
+#disabled = false
+
+[status]
+map_symbol = true
+disabled = false
+
+[sudo]
+disabled = false
+
+[time]
+#disabled = false

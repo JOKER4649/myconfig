@@ -1,0 +1,102 @@
+{
+  "$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-opencode/master/assets/oh-my-opencode.schema.json",
+  "sisyphus_agent": {
+    "default_builder_enabled": false
+  },
+  "auto_update": true,
+  "agents": {
+    "sisyphus": {
+      "model": "anthropic/claude-opus-4-6",
+      "variant": "max"
+    },
+    "hephaestus": {
+      "model": "openai/gpt-5.3-codex",
+      "variant": "medium"
+    },
+    "oracle": {
+      "model": "openai/gpt-5.2",
+      "variant": "high"
+    },
+    "librarian": {
+      "model": "zai-coding-plan/glm-4.7"
+    },
+    "explore": {
+      "model": "anthropic/claude-haiku-4-5"
+    },
+    "multimodal-looker": {
+      "model": "openai/gpt-5.2"
+    },
+    "prometheus": {
+      "model": "anthropic/claude-opus-4-6",
+      "variant": "max"
+    },
+    "metis": {
+      "model": "anthropic/claude-opus-4-6",
+      "variant": "max"
+    },
+    "momus": {
+      "model": "openai/gpt-5.2",
+      "variant": "medium"
+    },
+    "atlas": {
+      "model": "kimi-for-coding/k2p5"
+    }
+  },
+  "categories": {
+    "visual-engineering": {
+      "model": "zai-coding-plan/glm-5"
+    },
+    "ultrabrain": {
+      "model": "openai/gpt-5.3-codex",
+      "variant": "xhigh"
+    },
+    "deep": {
+      "model": "openai/gpt-5.3-codex",
+      "variant": "medium"
+    },
+    "quick": {
+      "model": "anthropic/claude-haiku-4-5"
+    },
+    "unspecified-low": {
+      "model": "anthropic/claude-sonnet-4-6"
+    },
+    "unspecified-high": {
+      "model": "anthropic/claude-opus-4-6",
+      "variant": "max"
+    },
+    "writing": {
+      "model": "kimi-for-coding/k2p5"
+    }
+  },
+  "disabled_hooks": [
+    "keyword-detector",
+    "dev-browser"
+  ],
+  "background_task": {
+    "defaultConcurrency": 5,
+    "providerConcurrency": {
+      "anthropic": 3,
+      "openai": 5,
+      "google": 10
+    },
+    "modelConcurrency": {
+      "anthropic/claude-opus-4-5": 2,
+      "google/gemini-3-flash": 10,
+      "zai-coding-plan/glm-5": 3,
+      "zai-coding-plan/glm-4.7": 5
+    }
+  },
+  "browser_automation_engine": {
+    "provider": "agent-browser"
+  },
+  "comment_checker": {
+    "custom_prompt": "考慮這些註解欄位：`Intent`, `Reason`, `Constraints`, `Caveats`。皆為非必填，僅在程式行為、設計動機、使用限制或風險對理解有實質幫助時，才添加或修改。如要刪除註解，請謹慎考慮。"
+  },
+  "tmux": {
+    "enabled": true,
+    "layout": "main-vertical",
+    "main_pane_size": 60,
+    "main_pane_min_width": 120,
+    "agent_pane_min_width": 40
+  }
+}

@@ -1,0 +1,28 @@
+[tools]
+node = "lts"
+bun = "latest"
+gcloud = 'latest'
+github-cli = 'latest'
+opencode = "latest"
+"npm:@antfu/ni" = "latest"
+pnpm = 'latest'
+"pipx:httpie" = "latest"
+python = "3.14"
+uv = "latest"
+zellij = "latest"
+"npm:pm2" = "latest"
+lazygit = "latest"
+yazi = "latest"
+"npm:agent-browser" = "latest"
+"npm:@vue/language-server" = "latest"
+claude = "latest"
+"npm:typescript-language-server" = "latest"
+"npm:portless" = "latest"
+
+
+[settings]
+npm.package_manager = "bun"
+python.uv_venv_auto = true
+
+[tasks.commit]
+run = "opencode run -m zai-coding-plan/glm-4.7 '對當前變更進行分組提交'"
