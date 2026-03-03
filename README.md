@@ -10,6 +10,7 @@
 | `zsh/` | Zsh shell 設定（基於 [Oh My Zsh](https://ohmyz.sh)） |
 | `mise/` | [mise](https://mise.jdx.dev) 開發工具版本管理器設定 |
 | `starship/` | [Starship](https://starship.rs) 跨 shell 提示字元設定 |
+| `backup/` | 每日自動備份腳本（cron 排程，自動 commit + push） |
 
 ## 新增工具設定
 
