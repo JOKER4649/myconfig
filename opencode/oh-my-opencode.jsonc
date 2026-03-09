@@ -14,7 +14,7 @@
       "variant": "medium"
     },
     "oracle": {
-      "model": "openai/gpt-5.2",
+      "model": "openai/gpt-5.4",
       "variant": "high"
     },
     "librarian": {
@@ -24,7 +24,8 @@
       "model": "anthropic/claude-haiku-4-5"
     },
     "multimodal-looker": {
-      "model": "openai/gpt-5.2"
+      "model": "openai/gpt-5.4",
+      "variant": "medium"
     },
     "prometheus": {
       "model": "anthropic/claude-opus-4-6",
@@ -35,16 +36,17 @@
       "variant": "max"
     },
     "momus": {
-      "model": "openai/gpt-5.2",
-      "variant": "medium"
+      "model": "openai/gpt-5.4",
+      "variant": "xhigh"
     },
     "atlas": {
-      "model": "anthropic/claude-sonnet-4-6"
+      "model": "kimi-for-coding/k2p5",
+      "prompt_append": "- **不**建立 git worktree"
     }
   },
   "categories": {
     "visual-engineering": {
-      "model": "zai-coding-plan/glm-5"
+      "model": "google/gemini-3.1-pro"
     },
     "ultrabrain": {
       "model": "openai/gpt-5.3-codex",
@@ -54,6 +56,9 @@
       "model": "openai/gpt-5.3-codex",
       "variant": "medium"
     },
+    "artistry": {
+      "model": "google/gemini-3.1-pro"
+    },
     "quick": {
       "model": "anthropic/claude-haiku-4-5"
     },
@@ -61,12 +66,11 @@
       "model": "anthropic/claude-sonnet-4-6"
     },
     "unspecified-high": {
-      "model": "anthropic/claude-opus-4-6",
-      "variant": "max"
+      "model": "openai/gpt-5.4",
+      "variant": "high"
     },
     "writing": {
-      "model": "kimi-for-coding/k2p5",
-      "prompt_append": "- **不**建立 git worktree"
+      "model": "google/gemini-3-flash"
     }
   },
   "disabled_hooks": [

@@ -18,7 +18,7 @@ yazi = "latest"
 claude = "latest"
 "npm:typescript-language-server" = "latest"
 "npm:portless" = "latest"
-
+"npm:@code-yeongyu/comment-checker" = "latest"
 
 [settings]
 npm.package_manager = "bun"

@@ -128,5 +128,8 @@ fi
 export EDITOR="code --wait"
 
 # wait https://github.com/sst/opencode/issues/4702
-#alias oc="SHELL=/usr/bin/bash opencode"
-alias oc="systemd-run --scope --user -p MemoryMax=10G -p MemoryHigh=8G opencode"
+alias oc="SHELL=/usr/bin/bash opencode"
+# alias oc="systemd-run --scope --user -p MemoryMax=10G -p MemoryHigh=8G opencode"
+
+# Added by LM Studio CLI tool (lms)
+export PATH="$PATH:/home/joker/.lmstudio/bin"
