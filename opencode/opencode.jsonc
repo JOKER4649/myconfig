@@ -13,15 +13,7 @@
       "pkill -f *": "deny"
     }
   },
-  "agent": {
-    "plan": {
-      "permission": {
-        "edit": "ask",
-        "bash": "allow",
-        "*": "allow"
-      }
-    }
-  },
+  "agent": {},
   "formatter": {
     "eslint": {
       "command": [
@@ -61,12 +53,5 @@
     //   "command": ["npx", "@playwright/mcp@latest"],
     // },
   },
-  "provider": {
-    "cloudflare-ai-gateway": {
-      "models": {
-        "google-ai-studio/gemini-3-flash-preview": {},
-        "google-ai-studio/gemini-3-pro-preview": {}
-      }
-    }
-  }
+  "provider": {}
 }

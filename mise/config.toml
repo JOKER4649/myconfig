@@ -24,8 +24,8 @@ claude = "latest"
 npm.package_manager = "bun"
 python.uv_venv_auto = true
 
-[task_config]
-dir = "tasks"
+# [task_config]
+# dir = "tasks"
 
 [tasks.commit]
-run = "opencode run -m zai-coding-plan/glm-4.7 '對當前變更進行分組提交'"
+run = "opencode run -m alibaba-coding-plan/kimi-k2.5 '對當前變更進行分組提交'"

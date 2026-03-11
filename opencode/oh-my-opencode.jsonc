@@ -65,7 +65,7 @@
       "model": "anthropic/claude-opus-4-6"
     },
     "writing": {
-      "model": "google/gemini-3-flash"
+      "model": "google/gemini-3-flash-preview"
     }
   },
   "auto_update": true,
@@ -78,7 +78,7 @@
     }
   },
   "disabled_hooks": [
-    "keyword-detector",
+    "keyword-detector"
   ],
   "disabled_skills": [
     "playwright",
