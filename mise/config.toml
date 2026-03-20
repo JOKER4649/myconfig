@@ -19,6 +19,7 @@ claude = "latest"
 "npm:typescript-language-server" = "latest"
 "npm:portless" = "latest"
 "npm:@code-yeongyu/comment-checker" = "latest"
+"pipx:mycli" = "latest"
 
 [settings]
 npm.package_manager = "bun"
