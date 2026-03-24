@@ -30,4 +30,4 @@ python.uv_venv_auto = true
 # dir = "tasks"
 
 [tasks.commit]
-run = "opencode run -m alibaba-coding-plan/kimi-k2.5 '對當前變更進行分組提交'"
+run = "opencode run -m opencode-go/minimax-m2.7 '對當前變更進行分組提交'"
