@@ -18,7 +18,7 @@ yazi = "latest"
 claude = "latest"
 "npm:typescript-language-server" = "latest"
 "npm:portless" = "latest"
-"npm:@code-yeongyu/comment-checker" = "latest"
+"github:code-yeongyu/go-claude-code-comment-checker" = { version = "latest", exe = "comment-checker" }
 "pipx:mycli" = "latest"
 glab = { version = "latest", exe = "glab" }
 "npm:oxlint" = "latest"
