@@ -91,7 +91,7 @@
   "background_task": {
     "defaultConcurrency": 5,
     "providerConcurrency": {
-      "anthropic": 3,
+      "anthropic": 5,
       "openai": 5,
       "google": 10
     },

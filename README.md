@@ -12,6 +12,7 @@
 | `starship/` | [Starship](https://starship.rs) 跨 shell 提示字元設定 |
 | `tmux/` | [tmux](https://github.com/tmux/tmux) 終端多工器設定 |
 | `backup/` | 每日自動備份腳本（cron 排程，自動 commit + push） |
+| `systemd/` | systemd user service 設定（opencode-web 等） |
 
 ## 新增工具設定
 

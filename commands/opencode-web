@@ -11,7 +11,7 @@ from typing import Annotated
 import typer
 
 SERVICE = "opencode-web.service"
-URL = "http://localhost:8080"
+URL = "http://0.0.0.0:4096"
 
 app = typer.Typer(help="opencode-web systemd service 管理工具")
 
