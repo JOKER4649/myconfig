@@ -36,6 +36,14 @@ LINKS: list[LinkEntry] = [
     LinkEntry(
         "systemd/opencode-web.service", "~/.config/systemd/user/opencode-web.service"
     ),
+    LinkEntry(
+        "systemd/portless-proxy.service",
+        "~/.config/systemd/user/portless-proxy.service",
+    ),
+    LinkEntry(
+        "environment.d/portless.conf",
+        "~/.config/environment.d/portless.conf",
+    ),
 ]
 
 # ============================================================

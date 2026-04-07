@@ -1,0 +1,29 @@
+[Unit]
+Description=Portless HTTPS Reverse Proxy
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=PORTLESS_PORT=1355
+# 啟動前清理可能由 auto-start 產生的 rogue daemon（- 前綴允許失敗）
+ExecStartPre=-%h/.local/share/mise/shims/portless proxy stop
+ExecStart=%h/.local/share/mise/shims/portless proxy start --foreground
+WorkingDirectory=%h
+Restart=on-failure
+RestartSec=5
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.portless
+PrivateTmp=true
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=portless-proxy
+
+[Install]
+WantedBy=default.target
