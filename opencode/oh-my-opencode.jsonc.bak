@@ -1,0 +1,120 @@
+{
+  "$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-opencode/master/assets/oh-my-opencode.schema.json",
+  "agents": {
+    "sisyphus": {
+      "model": "zai-coding-plan/glm-5.1",
+      "variant": "max",
+      "ultrawork": { "model": "anthropic/claude-opus-4-6", "variant": "max" }
+    },
+    "hephaestus": {
+      "model": "openai/gpt-5.4",
+      "variant": "medium"
+    },
+    "oracle": {
+      "model": "google/gemini-3.1-pro-preview-customtools",
+      "variant": "high"
+    },
+    "librarian": {
+      "model": "opencode-go/minimax-m2.7"
+    },
+    "explore": {
+      "model": "opencode-go/minimax-m2.7"
+    },
+    "multimodal-looker": {
+      "model": "opencode-go/kimi-k2.5"
+    },
+    "prometheus": {
+      "model": "google/gemini-3.1-pro-preview-customtools",
+      //"model": "anthropic/claude-opus-4-6",
+      "variant": "max"
+    },
+    "metis": {
+      "model": "anthropic/claude-opus-4-6",
+      "variant": "max"
+    },
+    "momus": {
+      "model": "github-copilot/gpt-5.4",
+      "variant": "xhigh"
+    },
+    "atlas": {
+      "model": "anthropic/claude-sonnet-4-6",
+      // "model": "alibaba-coding-plan/kimi-k2.5"
+      "prompt_append": "- `git worktree` 建立在 `./.worktree/[plan_name]` 中"
+    }
+  },
+  "categories": {
+    "visual-engineering": {
+      "model": "google/gemini-3.1-pro-preview-customtools",
+      "variant": "high"
+    },
+    "ultrabrain": {
+      "model": "openai/gpt-5.4",
+      "variant": "xhigh"
+    },
+    "deep": {
+      "model": "openai/gpt-5.4",
+      "variant": "medium"
+    },
+    "artistry": {
+      "model": "google/gemini-3.1-pro-preview-customtools",
+      "variant": "high"
+    },
+    "quick": {
+      "model": "opencode-go/minimax-m2.7"
+    },
+    "unspecified-high": {
+      "model": "anthropic/claude-opus-4-6",
+      "variant": "max"
+    },
+    "unspecified-low": {
+      "model": "opencode-go/minimax-m2.7"
+    },
+    "writing": {
+      "model": "google/gemini-3-flash-preview"
+    }
+  },
+  "auto_update": true,
+  "runtime_fallback": true,
+  "sisyphus_agent": {
+    "default_builder_enabled": false,
+    "tasks": {
+      "enabled": true,
+      "storage_path": ".sisyphus/tasks",
+      "claude_code_compat": false
+    }
+  },
+  "disabled_hooks": [
+    "keyword-detector"
+  ],
+  "disabled_skills": [
+    "playwright",
+    "dev-browser"
+  ],
+  "background_task": {
+    "defaultConcurrency": 5,
+    "providerConcurrency": {
+      "anthropic": 5,
+      "openai": 5,
+      "google": 10
+    },
+    "modelConcurrency": {
+      "anthropic/claude-opus-4-5": 2,
+      "google/gemini-3-flash": 10,
+      "zai-coding-plan/glm-5": 3,
+      "zai-coding-plan/glm-4.7": 5
+    }
+  },
+  "browser_automation_engine": {
+    "provider": "agent-browser"
+  },
+  "comment_checker": {
+    "custom_prompt": "考慮這些註解欄位：`Intent`, `Reason`, `Constraints`, `Caveats`。皆為非必填，僅在程式行為、設計動機、使用限制或風險對理解有實質幫助時，才添加或修改。如要刪除註解，請謹慎考慮。"
+  },
+  "tmux": {
+    "enabled": true,
+    "layout": "main-vertical",
+    "main_pane_size": 60,
+    "main_pane_min_width": 120,
+    "agent_pane_min_width": 40
+  }
+}
