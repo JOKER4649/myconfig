@@ -136,3 +136,6 @@ export PATH="$HOME/myconfig/commands:$PATH"
 # Added by LM Studio CLI tool (lms)
 export PATH="$PATH:/home/joker/.lmstudio/bin"
 export OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT=true
+
+# oh-my-openagent: 讓 Anthropic 模型使用 1M context limit（避免誤判為 200K）
+export ANTHROPIC_1M_CONTEXT=true

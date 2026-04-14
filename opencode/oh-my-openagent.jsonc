@@ -39,6 +39,9 @@
     "atlas": {
       "model": "zai-coding-plan/glm-5.1",
       "prompt_append": "- `git worktree` 建立在 `./.worktree/[plan_name]` 中"
+    },
+    "sisyphus-junior": {
+      "model": "zai-coding-plan/glm-5-turbo"
     }
   },
   "categories": {
@@ -66,7 +69,9 @@
       "variant": "max"
     },
     "unspecified-low": {
-      "model": "opencode-go/minimax-m2.7"
+      "model": "zai-coding-plan/glm-5-turbo",
+      "variant": "max"
+      //"model": "opencode-go/minimax-m2.7"
     },
     "writing": {
       "model": "google/gemini-3-flash-preview"
