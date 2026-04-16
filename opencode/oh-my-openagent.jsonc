@@ -2,7 +2,8 @@
   "$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-opencode/master/assets/oh-my-opencode.schema.json",
   "agents": {
     "sisyphus": {
-      "model": "zai-coding-plan/glm-5.1",
+      //"model": "zai-coding-plan/glm-5.1",
+      "model": "anthropic/claude-opus-4-6",
       "variant": "max",
       "ultrawork": { "model": "anthropic/claude-opus-4-6", "variant": "max" }
     },
@@ -15,17 +16,17 @@
       "variant": "high"
     },
     "librarian": {
-      "model": "opencode-go/minimax-m2.7"
+      "model": "google/gemini-3-flash-preview"
     },
     "explore": {
-      "model": "opencode-go/minimax-m2.7"
+      "model": "github-copilot/grok-code-fast-1"
     },
     "multimodal-looker": {
-      "model": "opencode-go/kimi-k2.5"
+      "model": "zai-coding-plan/glm-5v-turbo"
     },
     "prometheus": {
-      "model": "google/gemini-3.1-pro-preview-customtools",
-      //"model": "anthropic/claude-opus-4-6",
+      //"model": "google/gemini-3.1-pro-preview-customtools",
+      "model": "anthropic/claude-opus-4-6",
       "variant": "max"
     },
     "metis": {
@@ -37,7 +38,8 @@
       "variant": "xhigh"
     },
     "atlas": {
-      "model": "zai-coding-plan/glm-5.1",
+      "model": "anthropic/claude-sonnet-4-6",
+      "variant": "max",
       "prompt_append": "- `git worktree` 建立在 `./.worktree/[plan_name]` 中"
     },
     "sisyphus-junior": {
@@ -62,23 +64,23 @@
       "variant": "high"
     },
     "quick": {
-      "model": "opencode-go/minimax-m2.7"
+      "model": "anthropic/claude-sonnet-4-6",
+      "variant": "max"
     },
     "unspecified-high": {
       "model": "anthropic/claude-opus-4-6",
       "variant": "max"
     },
     "unspecified-low": {
-      "model": "zai-coding-plan/glm-5-turbo",
+      "model": "anthropic/claude-sonnet-4-6",
       "variant": "max"
-      //"model": "opencode-go/minimax-m2.7"
     },
     "writing": {
       "model": "google/gemini-3-flash-preview"
     }
   },
   "auto_update": true,
-  "runtime_fallback": true,
+  "runtime_fallback": false,
   "sisyphus_agent": {
     "default_builder_enabled": false,
     "tasks": {
