@@ -1,0 +1,403 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.12"
+# dependencies = ["typer", "httpx"]
+# ///
+"""小麥注音 (fcitx5-mcbopomofo) 一鍵安裝/更新工具（Fedora 專用，從源碼編譯）
+
+從官方 openvanilla/fcitx5-mcbopomofo 取得最新 release tag 的原始碼,
+用 cmake + ninja 編譯後安裝到 /usr。
+
+用法:
+    install-mcbopomofo              # 安裝或更新至最新版
+    install-mcbopomofo --check      # 只檢查,不實際安裝
+    install-mcbopomofo --force      # 強制重新編譯安裝,即使版本相同
+"""
+
+import os
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+from glob import glob
+from pathlib import Path
+from typing import Annotated
+
+import httpx
+import typer
+
+REPO = "openvanilla/fcitx5-mcbopomofo"
+GITHUB_API_LATEST = f"https://api.github.com/repos/{REPO}/releases/latest"
+GITHUB_API_TAGS = f"https://api.github.com/repos/{REPO}/tags"
+TARBALL_URL = f"https://github.com/{REPO}/archive/refs/tags/{{tag}}.tar.gz"
+
+# 編譯所需 Fedora 套件 — 對應官方 Ubuntu 文件 BuildRequires
+# (參考 apicalshark/copr-mcbopomofo 的 spec 檔: fcitx5-devel 會帶入
+#  Fcitx5Core/Module/Utils 的 pkgconfig)
+BUILD_DEPS_FEDORA = [
+    "gcc-c++",
+    "gettext",
+    "cmake",
+    "extra-cmake-modules",
+    "ninja-build",
+    "fcitx5-devel",
+    "fmt-devel",
+    "libicu-devel",
+    "json-c-devel",
+]
+
+# 官方 README 推薦 /usr (讓 fcitx5 能在預設路徑找到 addon)
+INSTALL_PREFIX = Path("/usr")
+
+# 狀態紀錄 (XDG state dir): 保存已安裝版本,下次可比對
+STATE_DIR = Path.home() / ".local" / "state" / "install-mcbopomofo"
+VERSION_FILE = STATE_DIR / "version"
+
+
+def run(
+    cmd: list[str],
+    *,
+    check: bool = True,
+    capture: bool = False,
+    cwd: Path | None = None,
+    force_c_locale: bool = False,
+) -> subprocess.CompletedProcess[str]:
+    """執行外部指令。force_c_locale=True 可固定成 C locale
+    (rpm/dnf 解析時必備,避免中文輸出讓我們誤判)"""
+    env = {**os.environ, "LC_ALL": "C"} if force_c_locale else None
+    return subprocess.run(
+        cmd,
+        check=check,
+        capture_output=capture,
+        text=True,
+        cwd=cwd,
+        env=env,
+    )
+
+
+# ---- 環境檢查 ----
+
+
+def require_dnf() -> None:
+    """確認跑在 Fedora/RHEL/Rocky 系列 (有 dnf)"""
+    if not shutil.which("dnf"):
+        print(
+            "此腳本僅支援有 dnf 的系統 (Fedora/RHEL/Rocky)",
+            file=sys.stderr,
+        )
+        print(
+            "其他 distro 請參考 https://github.com/openvanilla/fcitx5-mcbopomofo",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+
+def warn_if_fcitx5_missing() -> None:
+    """fcitx5 本身未安裝時提醒 (不致命,因為 BUILD_DEPS 會一起裝)"""
+    r = run(["rpm", "-q", "fcitx5"], capture=True, check=False, force_c_locale=True)
+    if r.returncode != 0:
+        print(
+            "⚠ 偵測到未安裝 fcitx5 本體。安裝小麥注音前建議先:",
+            file=sys.stderr,
+        )
+        print(
+            "  sudo dnf install fcitx5 fcitx5-configtool fcitx5-chinese-addons",
+            file=sys.stderr,
+        )
+
+
+def detect_rpm_conflict() -> str | None:
+    """檢查是否存在 rpm 管理的 fcitx5-mcbopomofo (例如透過 COPR 裝的)"""
+    r = run(
+        ["rpm", "-q", "fcitx5-mcbopomofo"],
+        capture=True,
+        check=False,
+        force_c_locale=True,
+    )
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
+# ---- 版本查詢 ----
+
+
+def find_installed_addon() -> Path | None:
+    """找已安裝的 mcbopomofo.so,回傳路徑 (無則 None)"""
+    # Fedora 64bit 是 /usr/lib64, 其他系統可能是 /usr/lib 或 multiarch 路徑
+    patterns = [
+        "/usr/lib64/fcitx5/mcbopomofo.so",
+        "/usr/lib/fcitx5/mcbopomofo.so",
+        "/usr/lib/*/fcitx5/mcbopomofo.so",
+    ]
+    for pat in patterns:
+        matches = glob(pat)
+        if matches:
+            return Path(matches[0])
+    return None
+
+
+def get_installed_version() -> str | None:
+    """回傳已安裝版本。未安裝 → None; 已安裝但無紀錄 → 'unknown'"""
+    if find_installed_addon() is None:
+        return None
+    if VERSION_FILE.exists():
+        return VERSION_FILE.read_text().strip() or "unknown"
+    return "unknown"
+
+
+def get_latest_version() -> str:
+    """從 GitHub 取最新 tag。優先 releases/latest, 退回 tags[0]"""
+    resp = httpx.get(GITHUB_API_LATEST, timeout=30, follow_redirects=True)
+    if resp.status_code == 404:
+        resp = httpx.get(GITHUB_API_TAGS, timeout=30, follow_redirects=True)
+        resp.raise_for_status()
+        tags = resp.json()
+        if not tags:
+            raise RuntimeError(f"{REPO} 無可用版本")
+        return tags[0]["name"]
+    resp.raise_for_status()
+    return resp.json()["tag_name"]
+
+
+# ---- Build dependency ----
+
+
+def check_missing_deps() -> list[str]:
+    """回傳尚未安裝的 build dependency 清單"""
+    # 強制 C locale 讓 rpm 輸出英文訊息 "package foo is not installed",
+    # 否則中文系統會輸出「軟體包 foo 尚未安裝」導致解析失敗
+    r = run(
+        ["rpm", "-q", *BUILD_DEPS_FEDORA],
+        capture=True,
+        check=False,
+        force_c_locale=True,
+    )
+    missing: list[str] = []
+    for line in r.stdout.splitlines():
+        # 未安裝輸出: "package foo is not installed"
+        # 已安裝輸出: "foo-1.2.3-1.fc43.x86_64"
+        if "is not installed" in line:
+            parts = line.split()
+            if len(parts) >= 2:
+                missing.append(parts[1])
+    return missing
+
+
+def install_deps(missing: list[str]) -> None:
+    """用 sudo dnf 安裝缺少的 build deps"""
+    print(f"安裝 build dependencies (需 sudo): {', '.join(missing)}")
+    run(["sudo", "dnf", "install", "-y", *missing])
+
+
+# ---- 下載 / 解壓 ----
+
+
+def download_tarball(tag: str, dest: Path) -> None:
+    """下載原始碼 tar.gz,顯示進度"""
+    url = TARBALL_URL.format(tag=tag)
+    print(f"  URL: {url}")
+    with httpx.stream("GET", url, follow_redirects=True, timeout=120) as resp:
+        resp.raise_for_status()
+        total = int(resp.headers.get("content-length", 0))
+        downloaded = 0
+        with open(dest, "wb") as f:
+            for chunk in resp.iter_bytes(chunk_size=65536):
+                f.write(chunk)
+                downloaded += len(chunk)
+                if total:
+                    pct = downloaded * 100 // total
+                    mb_dl = downloaded / 1024 / 1024
+                    mb_tot = total / 1024 / 1024
+                    print(
+                        f"\r  下載進度: {pct}% ({mb_dl:.1f}MB/{mb_tot:.1f}MB)",
+                        end="",
+                        flush=True,
+                    )
+        print()
+
+
+def extract_tarball(tar_path: Path, dest_dir: Path) -> Path:
+    """安全解壓 tar.gz (filter='data' 防止 path traversal), 回傳內層根目錄"""
+    with tarfile.open(tar_path, "r:gz") as tf:
+        tf.extractall(dest_dir, filter="data")
+    # GitHub tarball 內層固定是 {repo-name}-{tag}/
+    subdirs = [p for p in dest_dir.iterdir() if p.is_dir()]
+    if len(subdirs) != 1:
+        raise RuntimeError(
+            f"tarball 結構異常: 預期單一頂層目錄, 得到 {subdirs}"
+        )
+    return subdirs[0]
+
+
+# ---- 編譯 + 安裝 ----
+
+
+def build_and_install(src_dir: Path) -> None:
+    """cmake + ninja + sudo cmake --install"""
+    build_dir = src_dir / "build"
+    print("Configure (cmake + ninja)...")
+    run(
+        [
+            "cmake",
+            "-S",
+            str(src_dir),
+            "-B",
+            str(build_dir),
+            "-G",
+            "Ninja",
+            f"-DCMAKE_INSTALL_PREFIX={INSTALL_PREFIX}",
+            "-DCMAKE_BUILD_TYPE=Release",
+        ],
+    )
+    print("Build (ninja)...")
+    run(["cmake", "--build", str(build_dir)])
+    print("Install 到 /usr (需 sudo)...")
+    run(["sudo", "cmake", "--install", str(build_dir)])
+
+
+# ---- 後續步驟 ----
+
+
+def refresh_icon_cache() -> None:
+    """刷新 icon cache (讓 fcitx5 選單顯示小麥注音圖示)"""
+    if not shutil.which("update-icon-caches"):
+        # 部分最小化安裝沒有這工具,不致命
+        print("  · 跳過 icon cache 刷新 (未安裝 update-icon-caches)")
+        return
+    icon_dirs = sorted(glob("/usr/share/icons/*"))
+    if not icon_dirs:
+        return
+    print("刷新 icon cache...")
+    run(["sudo", "update-icon-caches", *icon_dirs], check=False)
+
+
+def reload_fcitx5() -> None:
+    """嘗試 reload 執行中的 fcitx5 (完整載入新 .so 通常還是要重啟)"""
+    r = run(["pgrep", "-x", "fcitx5"], capture=True, check=False)
+    if not r.stdout.strip():
+        print("  · fcitx5 沒在執行,跳過 reload")
+        return
+    if not shutil.which("fcitx5-remote"):
+        print("  · 找不到 fcitx5-remote,跳過")
+        return
+    r = run(["fcitx5-remote", "-r"], capture=True, check=False)
+    if r.returncode == 0:
+        print("  ✓ fcitx5 已傳送 reload 訊號 (fcitx5-remote -r)")
+    else:
+        print(f"  ⚠ fcitx5-remote -r 失敗: {r.stderr.strip() or r.stdout.strip()}")
+
+
+def save_version(version: str) -> None:
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    VERSION_FILE.write_text(version)
+
+
+# ---- CLI 入口 ----
+
+
+def main(
+    force: Annotated[
+        bool,
+        typer.Option(
+            "--force", "-f", help="強制重新編譯安裝,即使版本相同"
+        ),
+    ] = False,
+    check: Annotated[
+        bool,
+        typer.Option("--check", "-c", help="僅檢查最新版本,不下載/不安裝"),
+    ] = False,
+    skip_deps: Annotated[
+        bool,
+        typer.Option("--skip-deps", help="跳過 build dependency 檢查"),
+    ] = False,
+) -> None:
+    """安裝/更新 小麥注音 (fcitx5-mcbopomofo) — 從官方源碼編譯"""
+    require_dnf()
+    warn_if_fcitx5_missing()
+
+    # rpm 版本衝突檢查
+    rpm_ver = detect_rpm_conflict()
+    if rpm_ver and not force:
+        print(f"⚠ 偵測到 rpm 已安裝: {rpm_ver}")
+        print("  本腳本會把檔案裝到 /usr,可能與 rpm 管理路徑衝突")
+        print("  請先 `sudo dnf remove fcitx5-mcbopomofo`, 或加 --force 忽略")
+        raise typer.Exit(code=1)
+
+    current = get_installed_version()
+    print(f"目前版本: {current or '未安裝'}")
+
+    print("檢查最新版本中...")
+    latest = get_latest_version()
+    print(f"最新版本: {latest}")
+
+    if current == latest and not force:
+        print("\n✓ 已經是最新版本")
+        raise typer.Exit()
+
+    if check:
+        if current != latest:
+            print(f"\n有新版本可用: {current or '未安裝'} → {latest}")
+        raise typer.Exit()
+
+    # ---- build deps ----
+    if not skip_deps:
+        print("\n檢查 build dependencies...")
+        missing = check_missing_deps()
+        if missing:
+            install_deps(missing)
+        else:
+            print("  ✓ 全部已安裝")
+
+    # ---- 下載 + 解壓 + 編譯 + 安裝 ----
+    print(f"\n下載 {latest} 源碼...")
+    with tempfile.TemporaryDirectory(prefix="install-mcbopomofo-") as tmp:
+        tmp_path = Path(tmp)
+        tar_path = tmp_path / f"{latest}.tar.gz"
+        download_tarball(latest, tar_path)
+        print("解壓...")
+        src_dir = extract_tarball(tar_path, tmp_path)
+        print("\n編譯並安裝...")
+        build_and_install(src_dir)
+
+    # ---- 驗證安裝 ----
+    installed_at = find_installed_addon()
+    if installed_at is None:
+        print(
+            "\n⚠ 警告: cmake --install 完成但找不到 mcbopomofo.so",
+            file=sys.stderr,
+        )
+        raise typer.Exit(code=1)
+    print(f"  → 安裝於: {installed_at}")
+
+    save_version(latest)
+
+    print()
+    refresh_icon_cache()
+
+    print("\n重新載入 fcitx5...")
+    reload_fcitx5()
+
+    print(f"\n✓ 小麥注音 {latest} 安裝成功!")
+    if current is None:
+        print("\n[首次安裝] 下一步:")
+        print("  1. 開啟 fcitx5 設定工具:  fcitx5-configtool")
+        print("  2. 在「輸入法」頁籤新增「小麥注音 (McBopomofo)」")
+        print("  3. 若選單未更新,完整重啟 fcitx5:")
+        print("       systemctl --user restart fcitx5   # 若為 systemd user unit")
+        print("       或  pkill fcitx5 && fcitx5 -d &")
+    else:
+        print("\n若切換輸入法後仍是舊版,請完整重啟 fcitx5:")
+        print("  systemctl --user restart fcitx5   # 或 pkill fcitx5 && fcitx5 -d &")
+
+
+if __name__ == "__main__":
+    try:
+        typer.run(main)
+    except subprocess.CalledProcessError as e:
+        sys.exit(e.returncode)
+    except httpx.HTTPError as e:
+        print(f"網路錯誤: {e}", file=sys.stderr)
+        sys.exit(1)
+    except (tarfile.TarError, RuntimeError) as e:
+        print(f"錯誤: {e}", file=sys.stderr)
+        sys.exit(1)
