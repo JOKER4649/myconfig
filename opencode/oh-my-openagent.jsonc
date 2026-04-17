@@ -3,9 +3,9 @@
   "agents": {
     "sisyphus": {
       //"model": "zai-coding-plan/glm-5.1",
-      "model": "anthropic/claude-opus-4-6",
+      "model": "anthropic/claude-opus-4-7",
       "variant": "max",
-      "ultrawork": { "model": "anthropic/claude-opus-4-6", "variant": "max" }
+      "ultrawork": { "model": "anthropic/claude-opus-4-7", "variant": "max" }
     },
     "hephaestus": {
       "model": "openai/gpt-5.4",
@@ -26,11 +26,11 @@
     },
     "prometheus": {
       //"model": "google/gemini-3.1-pro-preview-customtools",
-      "model": "anthropic/claude-opus-4-6",
+      "model": "anthropic/claude-opus-4-7",
       "variant": "max"
     },
     "metis": {
-      "model": "anthropic/claude-opus-4-6",
+      "model": "anthropic/claude-opus-4-7",
       "variant": "max"
     },
     "momus": {
@@ -39,11 +39,11 @@
     },
     "atlas": {
       "model": "anthropic/claude-sonnet-4-6",
-      "variant": "max",
+      "variant": "high",
       "prompt_append": "- `git worktree` 建立在 `./.worktree/[plan_name]` 中"
     },
     "sisyphus-junior": {
-      "model": "zai-coding-plan/glm-5-turbo"
+      //"model": "zai-coding-plan/glm-5-turbo"
     }
   },
   "categories": {
@@ -68,7 +68,7 @@
       "variant": "max"
     },
     "unspecified-high": {
-      "model": "anthropic/claude-opus-4-6",
+      "model": "anthropic/claude-opus-4-7",
       "variant": "max"
     },
     "unspecified-low": {
