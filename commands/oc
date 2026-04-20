@@ -130,6 +130,11 @@ def _has_subcommand() -> bool:
     return len(sys.argv) > 1 and not sys.argv[1].startswith("-")
 
 
+def _use_tmux() -> bool:
+    """檢查是否透過 OC_USE_TMUX 環境變數啟用 tmux（預設不啟用）。"""
+    return os.environ.get("OC_USE_TMUX", "").lower() in {"1", "true", "yes"}
+
+
 def main() -> None:
     # 子命令（如 oc config, oc auth）直接轉發，不透過 tmux
     if _has_subcommand():
@@ -138,10 +143,18 @@ def main() -> None:
     project = detect_project_name()
     port = find_available_port()
     title = f"🔳 {project}"
-    session = f"{project}-{port}"
 
     set_terminal_title(title)
     rename_zellij_tab(title)
+
+    # 預設直接執行 opencode；OC_USE_TMUX=1 時才包進 tmux session
+    if not _use_tmux():
+        os.execvp(
+            "opencode",
+            ["opencode", "--port", str(port), *sys.argv[1:]],
+        )
+
+    session = f"{project}-{port}"
     extra_args = " ".join(sys.argv[1:])
     opencode_cmd = f"opencode --port {port} {extra_args}".rstrip()
     subprocess.run(
