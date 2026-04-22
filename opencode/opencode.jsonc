@@ -3,12 +3,13 @@
   "plugin": [
     "oh-my-openagent@latest",
     //"opencode-claude-auth@latest",
-    "@ex-machina/opencode-anthropic-auth@latest",
-    "opencode-pty@latest"
+    "@ex-machina/opencode-anthropic-auth@1.7.5",
+    // "opencode-pty@latest", // 不太穩定
+    "@slkiser/opencode-quota"
   ],
   "autoupdate": true,
   "model": "anthropic/claude-sonnet-4-6", // 預設模型
-  "small_model": "openai/gpt-5.4-nano", // 可選的小模型
+  "small_model": "minimax-coding-plan/MiniMax-M2.1", // 可選的小模型
   "permission": {
     "bash": {
       // "rm *": "ask",
@@ -53,7 +54,16 @@
     //   "enabled": true,
     //   "type": "local",
     //   "command": ["npx", "@playwright/mcp@latest"],
-    // },
+    // }
   },
-  "provider": {}
+  "provider": {},
+  "experimental": {
+    "quotaToast": {
+      "enableToast": false,
+      "showSessionTokens": true,
+      "enabledProviders": "auto",
+      "formatStyle": "grouped",
+      "percentDisplayMode": "used"
+    }
+  }
 }
