@@ -1,54 +1,52 @@
 {
-  "$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-opencode/master/assets/oh-my-opencode.schema.json",
+  "$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-opencode/dev/assets/oh-my-opencode.schema.json",
   "agents": {
     "sisyphus": {
-      //"model": "zai-coding-plan/glm-5.1",
       "model": "anthropic/claude-opus-4-7",
       "variant": "max",
-      "ultrawork": { "model": "anthropic/claude-opus-4-7", "variant": "max" }
+      "ultrawork": {
+        "model": "anthropic/claude-opus-4-7",
+        "variant": "max"
+      }
     },
     "hephaestus": {
       "model": "openai/gpt-5.4",
-      "variant": "medium"
+      "prompt_append": "Explore thoroughly, then implement. Prefer small, testable changes."
+    },
+    "prometheus": {
+      "model": "openai/gpt-5.4",
+      "prompt_append": "Always interview first. Validate scope before planning."
     },
     "oracle": {
-      "model": "google/gemini-3.1-pro-preview-customtools",
+      "model": "opencode/gemini-3.1-pro",
       "variant": "high"
     },
     "librarian": {
-      "model": "google/gemini-3-flash-preview"
+      "model": "opencode/gemini-3-flash"
     },
     "explore": {
       "model": "github-copilot/grok-code-fast-1"
     },
     "multimodal-looker": {
-      "model": "zai-coding-plan/glm-5v-turbo"
-    },
-    "prometheus": {
-      //"model": "google/gemini-3.1-pro-preview-customtools",
-      "model": "anthropic/claude-opus-4-7",
-      "variant": "max"
+      "model": "opencode/gemini-3.1-pro"
     },
     "metis": {
-      "model": "anthropic/claude-opus-4-7",
-      "variant": "max"
+      "model": "openai/gpt-5.4"
     },
     "momus": {
-      "model": "github-copilot/gpt-5.4",
-      "variant": "xhigh"
+      "prompt_append": "Focus on code quality, edge cases, and test coverage."
     },
     "atlas": {
       "model": "anthropic/claude-sonnet-4-6",
-      "variant": "high",
-      "prompt_append": "- `git worktree` 建立在 `./.worktree/[plan_name]` 中"
+      "variant": "high"
     },
     "sisyphus-junior": {
-      //"model": "zai-coding-plan/glm-5-turbo"
+      "model": "openai/gpt-5.4-mini"
     }
   },
   "categories": {
     "visual-engineering": {
-      "model": "google/gemini-3.1-pro-preview-customtools",
+      "model": "opencode/gemini-3.1-pro",
       "variant": "high"
     },
     "ultrabrain": {
@@ -60,12 +58,11 @@
       "variant": "medium"
     },
     "artistry": {
-      "model": "google/gemini-3.1-pro-preview-customtools",
+      "model": "opencode/gemini-3.1-pro",
       "variant": "high"
     },
     "quick": {
-      "model": "anthropic/claude-sonnet-4-6",
-      "variant": "max"
+      "model": "minimax-coding-plan/MiniMax-M2.7"
     },
     "unspecified-high": {
       "model": "anthropic/claude-opus-4-7",
@@ -76,7 +73,7 @@
       "variant": "max"
     },
     "writing": {
-      "model": "google/gemini-3-flash-preview"
+      "model": "opencode/gemini-3-flash"
     }
   },
   "auto_update": true,
@@ -97,14 +94,13 @@
     "dev-browser"
   ],
   "background_task": {
-    "defaultConcurrency": 5,
+    "defaultConcurrency": 8,
     "providerConcurrency": {
       "anthropic": 5,
       "openai": 5,
-      "google": 10
-    },
-    "modelConcurrency": {
-      "anthropic/claude-opus-4-5": 2
+      "google": 10,
+      "github-copilot": 10,
+      "opencode": 15
     }
   },
   "browser_automation_engine": {
@@ -122,5 +118,10 @@
   },
   "git_master": {
     "include_co_authored_by": false
+  },
+  "hashline_edit": true,
+  "experimental": {
+    "aggressive_truncation": true,
+    "task_system": true
   }
 }
