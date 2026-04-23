@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Ruff formatter wrapper：尊重專案層級配置，無則 fallback 全局 myconfig/ruff/ruff.toml
+#
+# 用法：fmt-ruff <file>
+# 由 opencode formatter command 調用（opencode/opencode.jsonc 的 formatter.ruff.command）
+set -eu
+
+FILE="${1:-}"
+[ -n "$FILE" ] || {
+  echo "usage: $(basename "$0") <file>" >&2
+  exit 2
+}
+
+RUFF=/home/joker/.local/share/mise/shims/ruff
+GLOBAL_CONFIG=/home/joker/myconfig/ruff/ruff.toml
+
+# 從 $FILE 所在目錄往上找 ruff.toml / .ruff.toml 或 pyproject.toml#[tool.ruff]
+dir=$(dirname "$(realpath "$FILE")")
+while [ "$dir" != "/" ]; do
+  if [ -f "$dir/ruff.toml" ] || [ -f "$dir/.ruff.toml" ]; then
+    exec "$RUFF" format "$FILE"
+  fi
+  if [ -f "$dir/pyproject.toml" ] && grep -q '^\[tool\.ruff' "$dir/pyproject.toml"; then
+    exec "$RUFF" format "$FILE"
+  fi
+  dir=$(dirname "$dir")
+done
+
+# Fallback 到全局配置
+exec "$RUFF" format --config "$GLOBAL_CONFIG" "$FILE"

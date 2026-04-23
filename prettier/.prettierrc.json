@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json.schemastore.org/prettierrc",
+  "printWidth": 100,
+  "tabWidth": 2,
+  "useTabs": false,
+  "semi": false,
+  "singleQuote": false,
+  "quoteProps": "as-needed",
+  "jsxSingleQuote": false,
+  "trailingComma": "all",
+  "bracketSpacing": true,
+  "bracketSameLine": false,
+  "arrowParens": "always",
+  "endOfLine": "lf",
+  "embeddedLanguageFormatting": "auto",
+  "plugins": [
+    "/home/joker/myconfig/prettier/node_modules/prettier-plugin-astro/dist/index.js",
+    "/home/joker/myconfig/prettier/node_modules/prettier-plugin-svelte/plugin.js"
+  ],
+  "overrides": [
+    {
+      "files": "*.astro",
+      "options": { "parser": "astro" }
+    },
+    {
+      "files": "*.svelte",
+      "options": { "parser": "svelte" }
+    },
+    {
+      "files": ["*.md", "*.mdx"],
+      "options": { "proseWrap": "preserve" }
+    },
+    {
+      "files": ["*.yaml", "*.yml"],
+      "options": { "singleQuote": false }
+    }
+  ]
+}

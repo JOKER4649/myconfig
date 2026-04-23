@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Prettier formatter wrapper：尊重專案層級配置與專案 binary/plugin，無則 fallback 全局
+#
+# 用法：fmt-prettier <file>
+# 由 opencode formatter command 調用（opencode/opencode.jsonc 的 formatter.prettier.command）
+set -eu
+
+FILE="${1:-}"
+[ -n "$FILE" ] || {
+  echo "usage: $(basename "$0") <file>" >&2
+  exit 2
+}
+
+GLOBAL_BIN=/home/joker/myconfig/prettier/node_modules/.bin/prettier
+GLOBAL_CONFIG=/home/joker/myconfig/prettier/.prettierrc.json
+
+# 從 $FILE 所在目錄往上找 .prettierrc*、prettier.config.* 或 package.json#prettier
+dir=$(dirname "$(realpath "$FILE")")
+while [ "$dir" != "/" ]; do
+  for c in \
+    .prettierrc .prettierrc.json .prettierrc.yaml .prettierrc.yml \
+    .prettierrc.toml .prettierrc.js .prettierrc.cjs .prettierrc.mjs \
+    prettier.config.js prettier.config.cjs prettier.config.mjs prettier.config.ts; do
+    if [ -f "$dir/$c" ]; then
+      # 優先用專案 binary（支援專案自有 plugin 版本）；否則用全局 binary + 專案 config find-up
+      if [ -x "$dir/node_modules/.bin/prettier" ]; then
+        exec "$dir/node_modules/.bin/prettier" --write "$FILE"
+      fi
+      exec "$GLOBAL_BIN" --write "$FILE"
+    fi
+  done
+  # 亦處理 package.json 中的 "prettier" 欄位（top-level，非 dependencies 中的套件名）
+  if [ -f "$dir/package.json" ] &&
+    /home/joker/.local/share/mise/shims/bun -e \
+      "const p=require('$dir/package.json'); process.exit(typeof p.prettier==='object' || typeof p.prettier==='string' ? 0 : 1)" \
+      2>/dev/null; then
+    if [ -x "$dir/node_modules/.bin/prettier" ]; then
+      exec "$dir/node_modules/.bin/prettier" --write "$FILE"
+    fi
+    exec "$GLOBAL_BIN" --write "$FILE"
+  fi
+  dir=$(dirname "$dir")
+done
+
+# Fallback 到全局配置（含 astro/svelte plugins）
+exec "$GLOBAL_BIN" --config "$GLOBAL_CONFIG" --write "$FILE"

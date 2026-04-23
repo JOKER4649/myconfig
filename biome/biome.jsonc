@@ -1,0 +1,68 @@
+{
+  // 全局 Biome 配置 —— 由 opencode formatter 透過 --config-path 指向此目錄
+  // 專案若有自己的 biome.json 會優先於此
+  "$schema": "https://biomejs.dev/schemas/2.4.12/schema.json",
+  "vcs": {
+    "enabled": false,
+    "clientKind": "git",
+    "useIgnoreFile": true,
+  },
+  "files": {
+    "ignoreUnknown": true,
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100,
+    "lineEnding": "lf",
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "jsxQuoteStyle": "double",
+      "semicolons": "asNeeded",
+      "trailingCommas": "all",
+      "arrowParentheses": "always",
+      "bracketSpacing": true,
+      "bracketSameLine": false,
+      "quoteProperties": "asNeeded",
+    },
+  },
+  "json": {
+    "formatter": {
+      "trailingCommas": "none",
+    },
+    "parser": {
+      "allowComments": true,
+      "allowTrailingCommas": true,
+    },
+  },
+  "css": {
+    "formatter": {
+      "quoteStyle": "double",
+    },
+  },
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "on",
+      },
+    },
+  },
+  "linter": {
+    // 只當 formatter 用，lint 交給 oxlint / 專案層
+    "enabled": false,
+  },
+  "overrides": [
+    {
+      // JSONC 檔保留 trailing commas（opencode.jsonc 等依賴此行為）
+      "includes": ["**/*.jsonc"],
+      "json": {
+        "formatter": {
+          "trailingCommas": "all",
+        },
+      },
+    },
+  ],
+}

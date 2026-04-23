@@ -1,0 +1,17 @@
+# 全局 Ruff 配置 —— 由 opencode formatter 透過 --config 指向此檔
+# 專案若有自己的 pyproject.toml [tool.ruff] 或 ruff.toml 會優先於此
+line-length = 100
+indent-width = 4
+target-version = "py312"
+
+[format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "lf"
+docstring-code-format = true
+docstring-code-line-length = "dynamic"
+
+[lint]
+# 只當 formatter 用，lint 不啟用規則
+select = []
