@@ -1,4 +1,5 @@
 ---
+name: create-strong-pr
 description: 建立 `review ready` 的健壯 PR
 ---
 
