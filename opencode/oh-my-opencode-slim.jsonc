@@ -1,0 +1,152 @@
+{
+  // oh-my-opencode-slim 配置
+  // 目的: 作為 OmO 的評估替代品, 保留用戶原本的模型偏好與自訂 agent 擴充
+  //
+  // 啟用方式: 編輯 opencode.jsonc 的 "plugin" 陣列,
+  //   把 "oh-my-openagent@latest" 換成 "oh-my-opencode-slim@latest"
+  //
+  // 文件參考:
+  //   Schema:        https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/src/config/schema.ts
+  //   Orchestrator:  https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/src/agents/orchestrator.ts
+  //   Configuration: https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/configuration.md
+
+  "$schema": "https://unpkg.com/oh-my-opencode-slim@latest/oh-my-opencode-slim.schema.json",
+
+  // ─── Preset: 用戶原本 OmO 偏好的模型映射 ───────────────────────────────
+  // 選用此 preset 作為內建 7+1 agent 的模型配置
+  "preset": "default",
+
+  "presets": {
+    "default": {
+      // Orchestrator = 相當於原本的 sisyphus (主協調者)
+      "orchestrator": {
+        "model": "anthropic/claude-opus-4-7",
+        "variant": "max",
+        "skills": ["*"],
+        "mcps": ["*", "!context7"],
+      },
+      // Oracle = 原本的 oracle (深度推理 / code review)
+      "oracle": {
+        "model": "openai/gpt-5.4",
+        "variant": "high",
+        "skills": ["simplify"],
+      },
+      // Librarian = 原本的 librarian (外部文件查找)
+      "librarian": {
+        //"model": "opencode/gemini-3-flash",
+        "model": "minimax-coding-plan/MiniMax-M2.7",
+        "skills": [],
+        "mcps": ["websearch", "context7", "grep_app"],
+      },
+      // Explorer = 原本的 explore (程式碼搜尋)
+      "explorer": {
+        "model": "openai/gpt-5.4-mini",
+      },
+      // Designer = 原本的 visual-engineering category
+      "designer": {
+        "model": "opencode/gemini-3.1-pro",
+        "variant": "high",
+        "skills": ["agent-browser"],
+        "mcps": [],
+      },
+      // Fixer = 原本的 sisyphus-junior (快速執行)
+      "fixer": {
+        "model": "openai/gpt-5.4-mini",
+      },
+      // Observer = 原本的 multimodal-looker (需要 disabled_agents=[] 才會啟用)
+      "observer": {
+        "model": "opencode-go/kimi-k2.5",
+      },
+      // Council master = 合成 councillors 答案的 model. 需要強 reasoning
+      // (councillors 另在 top-level "council.presets" 定義)
+      "council": {
+        "model": "openai/gpt-5.4",
+        "variant": "high",
+      },
+    },
+  },
+
+  // ─── 自訂 Agents (OmO 有但 Slim 沒有的) ───────────────────────
+  // 核心原則: 只新增 Slim 內建 agent 無法覆蓋的角色
+  // 未來要加更多, 直接在此 "agents" 物件裡擴充
+  //
+  // Prompt 內容檔案: oh-my-opencode-slim/{agent}.md (Slim 自動從此目錄載入)
+  // 只留 orchestratorPrompt 在此 (用於告訴 orchestrator 何時派遣該 agent)
+  "agents": {
+    // Metis: 預規劃顧問 (對應原 OmO 的 metis)
+    // 觸發情境: orchestrator 判斷需求模糊 / 有多種解釋 / 需要釐清 scope
+    "metis": {
+      "model": "openai/gpt-5.4-mini",
+      "variant": "xhigh",
+      "orchestratorPrompt": "@metis - Pre-planning consultant. Delegate BEFORE any plan writing when: (1) request has multiple valid interpretations, (2) scope is unclear or open-ended, (3) user's stated need may not match their actual goal, (4) task involves high-stakes architectural decisions. Don't use for well-scoped tactical tasks.",
+    },
+
+    // Momus: 計畫批評者 (對應原 OmO 的 momus)
+    // 觸發情境: 計畫已產出但進入執行前, 需要品質把關
+    "momus": {
+      "model": "openai/gpt-5.4-mini",
+      "variant": "xhigh",
+      "orchestratorPrompt": "@momus - Plan reviewer/critic. Delegate AFTER a plan is written but BEFORE execution starts when: (1) the plan is non-trivial (4+ steps or multi-file), (2) the user explicitly requested review, (3) failure cost is high. Momus will return PASS/REVISE/REJECT with specific fixes. Do NOT use for simple tactical tasks.",
+    },
+
+    // Prometheus: 規劃專家 (對應原 OmO 的 prometheus)
+    // 觸發情境: 需要產出完整計畫, 特別是需要先 interview 釐清的情境
+    "prometheus": {
+      "model": "openai/gpt-5.4-mini",
+      "variant": "xhigh",
+      "orchestratorPrompt": "@prometheus - Planning specialist. Delegate when: (1) task needs a full plan document (not just a todo list), (2) requirements need interview-style clarification first, (3) plan will be handed off to @momus for review or executed over multiple sessions. Don't use for tasks you can plan inline in 2-3 bullet points.",
+    },
+  },
+
+  // ─── Todo 自動延續 (取代 OmO 的 todo-continuation-enforcer hook) ──────
+  // Slim 的版本比較節制, 不會直升機父母式干預
+  "todoContinuation": {
+    "autoEnable": true,
+    "autoEnableThreshold": 4, // ≥4 個 todo 才自動延續
+    "maxContinuations": 5,
+    "cooldownMs": 3000, // 延續前暫停 3 秒, 讓用戶有機會中斷
+  },
+
+  // ─── Multiplexer (zellij pane 整合) ───────────────────────────
+  // Slim 會自動建立 `opencode-agents` tab 展示 subagent 活動
+  // 注意: zellij 不吃 layout / main_pane_size (這兩個欄位是 tmux-only)
+  // 注意: 需搭配 `OPENCODE_PORT=XXXX opencode --port XXXX` 啟動, 否則整合不會觸發
+  //         詳見 https://github.com/anomalyco/opencode/issues/9099
+  "multiplexer": {
+    // "type": "zellij",
+  },
+
+  // ─── Web 搜尋 Provider ──────────────────────────────────────────────
+  "websearch": {
+    "provider": "exa",
+  },
+
+  // ─── Council (多 LLM 共識引擎) ──────────────────────────────────────
+  // master (合成者) 已在 preset 的 "council" 設 openai/gpt-5.4 high
+  // 此處定義 councillors: 並行被問的 model. 選 2 個 non-openai 確保 provider diversity
+  // 呼叫方式: @council <question>, orchestrator 不會自動派 (成本太高)
+  // 詳見 https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/council.md
+  "council": {
+    "default_preset": "default",
+    "presets": {
+      "default": {
+        "claude": { "model": "anthropic/claude-sonnet-4-6", "variant": "max" },
+        "gpt": { "model": "openai/gpt-5.4-mini", "variant": "xhigh" },
+      },
+      "deep": {
+        "claude": { "model": "anthropic/claude-opus-4-7", "variant": "max" },
+        "gemini": { "model": "opencode/gemini-3.1-pro", "variant": "high" },
+        "gpt": { "model": "openai/gpt-5.4", "variant": "xhigh" },
+      },
+    },
+    "timeout": 180000, // 每個 councillor 3 分鐘上限
+  },
+
+  // ─── Model Fallback (若 primary 失敗自動降級) ─────────────────────
+  "fallback": {
+    "enabled": true,
+    "timeoutMs": 15000,
+    "retryDelayMs": 500,
+    "retry_on_empty": true,
+  },
+}

@@ -1,61 +1,84 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "plugin": [
-    "oh-my-openagent@latest",
-    //"opencode-claude-auth@latest",
+    //"oh-my-openagent@latest",
+    "oh-my-opencode-slim@latest",
     "@ex-machina/opencode-anthropic-auth@1.7.5",
-    // "opencode-pty@latest", // 不太穩定
-    "@slkiser/opencode-quota"
+    "@slkiser/opencode-quota",
   ],
   "autoupdate": true,
-  "model": "anthropic/claude-sonnet-4-6", // 預設模型
-  "small_model": "minimax-coding-plan/MiniMax-M2.1", // 可選的小模型
+  "model": "anthropic/claude-sonnet-4-6",
+  "small_model": "openai/gpt-5.4-mini",
   "permission": {
     "bash": {
-      // "rm *": "ask",
-      "pkill -f *": "deny"
-    }
+      "pkill -f *": "deny",
+    },
   },
-  "agent": {},
+  "agent": {
+    "explore": {
+      "disable": true,
+    },
+    "general": {
+      "disable": true,
+    },
+    "plan": {
+      "disable": true,
+    },
+    "build": {
+      "disable": true,
+    },
+  },
   "formatter": {
-    "eslint": {
-      "command": [
-        "bunx",
-        "eslint",
-        "--fix",
-        "$FILE"
-      ],
+    // 全域停用預設 eslint formatter：由 Biome 接管 TS/JS lint+format；
+    // 專案如需 eslint 可在自己的 opencode.json 覆蓋為 { "disabled": false, "command": [...] }
+    "eslint": { "disabled": true },
+    // Biome 處理 TS/JS/JSX/TSX/JSON/JSONC/CSS（格式化 + import 排序）
+    // Wrapper 邏輯：專案有 biome.json/biome.jsonc 則用專案配置，否則 fallback 全局 myconfig/biome/
+    "biome": {
+      "command": ["/home/joker/myconfig/formatters/fmt-biome", "$FILE"],
       "extensions": [
         ".js",
         ".jsx",
+        ".mjs",
+        ".cjs",
         ".ts",
-        ".tsx"
-      ]
-    },
-    "prettier": {
-      "extensions": [
-        ".html",
-        ".css",
-        ".md",
+        ".tsx",
+        ".mts",
+        ".cts",
         ".json",
+        ".jsonc",
+        ".css",
+      ],
+    },
+    // Prettier 處理 Biome 不擅長的 SFC 與 markup 格式（Vue/Astro/Svelte/MD/YAML/HTML/SCSS/GraphQL）
+    // Wrapper 邏輯：專案有 .prettierrc*/prettier.config.* 則用專案配置（優先用專案 binary）
+    "prettier": {
+      "command": ["/home/joker/myconfig/formatters/fmt-prettier", "$FILE"],
+      "extensions": [
+        ".vue",
+        ".astro",
+        ".svelte",
+        ".md",
+        ".mdx",
         ".yaml",
         ".yml",
-        ".graphql",
-        ".vue",
-        ".svelte",
+        ".html",
+        ".htm",
+        ".scss",
+        ".sass",
         ".less",
-        ".scss"
-      ]
-    }
+        ".graphql",
+        ".gql",
+      ],
+    },
+    // Ruff 處理 Python（.py/.pyi）
+    // Wrapper 邏輯：專案有 ruff.toml / pyproject.toml[tool.ruff] 則用專案配置，否則 fallback 全局
+    "ruff": {
+      "command": ["/home/joker/myconfig/formatters/fmt-ruff", "$FILE"],
+      "extensions": [".py", ".pyi"],
+    },
   },
-  "mcp": {
-    // oh-my-opencode 已內建
-    // "playwright": {
-    //   "enabled": true,
-    //   "type": "local",
-    //   "command": ["npx", "@playwright/mcp@latest"],
-    // }
-  },
+  "mcp": {},
   "provider": {},
   "experimental": {
     "quotaToast": {
@@ -63,7 +86,7 @@
       "showSessionTokens": true,
       "enabledProviders": "auto",
       "formatStyle": "grouped",
-      "percentDisplayMode": "used"
-    }
-  }
+      "percentDisplayMode": "used",
+    },
+  },
 }
