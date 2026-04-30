@@ -24,7 +24,6 @@ glab = { version = "latest", exe = "glab" }
 "npm:oxlint" = "latest"
 "npm:@biomejs/biome" = "latest"
 "pipx:ruff" = "latest"
-# rtk = "latest"  # 暫時停用 - plugin 移至 plugins-disabled/
 bat = "latest"
 "pipx:numpy" = "latest"
 act = "latest"
