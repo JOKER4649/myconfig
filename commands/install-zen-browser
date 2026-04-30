@@ -1,0 +1,357 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.12"
+# dependencies = ["typer"]
+# ///
+"""Zen Browser 安裝工具（官方 tarball installer，Linux 專用）
+
+使用 Zen 官方安裝腳本：
+  curl -fsSL https://github.com/zen-browser/updates-server/raw/refs/heads/main/install.sh | sh
+
+這是官方提供的 Linux tarball 安裝方式，非 RPM/Flatpak。
+重新執行 --apply 可用於更新。
+
+用法：
+    install-zen-browser              # 預覽模式（不實際變更系統）
+    install-zen-browser --apply      # 實際執行安裝
+    install-zen-browser --check      # 檢查目前安裝狀態
+    install-zen-browser --remove     # 移除已安裝的 tarball 版本
+"""
+
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+from typing import Annotated
+
+import typer
+
+# ---- 常數 ----
+
+OFFICIAL_INSTALL_URL = "https://github.com/zen-browser/updates-server/raw/refs/heads/main/install.sh"
+
+# 官方 tarball 安裝位置
+TARBALL_BASE = Path.home() / ".tarball-installations" / "zen"
+TARBALL_BINARY = TARBALL_BASE / "zen"
+
+# 可能的 wrapper/bin 路徑
+WRAPPER_PATHS = [
+    Path.home() / ".local" / "bin" / "zen",
+    Path.home() / ".local" / "bin" / "zen-browser",
+]
+DESKTOP_ENTRY_PATH = Path.home() / ".local" / "share" / "applications" / "zen.desktop"
+
+SUPPORTED_ARCHES = ("x86_64", "aarch64")
+
+
+# ---- 工具函式 ----
+
+
+def run(
+    cmd: list[str],
+    *,
+    check: bool = True,
+    capture: bool = False,
+    cwd: Path | None = None,
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        cmd, check=check, capture_output=capture, text=True, cwd=cwd
+    )
+
+
+# ---- 環境檢查 ----
+
+
+def check_environment() -> None:
+    """檢查平台與架構是否支援。"""
+    if sys.platform != "linux":
+        print(f"此腳本僅支援 Linux（目前為 {sys.platform}）", file=sys.stderr)
+        sys.exit(1)
+
+    arch = subprocess.run(
+        ["uname", "-m"], capture_output=True, text=True
+    ).stdout.strip()
+    if arch not in SUPPORTED_ARCHES:
+        print(
+            f"此腳本僅支援 {', '.join(SUPPORTED_ARCHES)} 架構（目前為 {arch}）",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    missing_tools = [tool for tool in ("bash", "curl", "tar") if not shutil.which(tool)]
+    if missing_tools:
+        print(
+            f"缺少必要工具：{', '.join(missing_tools)}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+
+def find_installation() -> dict[str, bool]:
+    """檢查常見官方 tarball 安裝位置，回傳狀態map。"""
+    return {
+        "tarball": TARBALL_BINARY.exists(),
+        "wrapper_zen": WRAPPER_PATHS[0].exists(),
+        "wrapper_zen_browser": WRAPPER_PATHS[1].exists(),
+        "desktop_entry": DESKTOP_ENTRY_PATH.exists(),
+    }
+
+
+def get_installed_info() -> dict[str, str]:
+    """取得已安裝版本的相關資訊。"""
+    info: dict[str, str] = {}
+    installs = find_installation()
+
+    if installs["tarball"]:
+        # 取版本：嘗試從目錄結構推断，或執行 --version
+        version_file = TARBALL_BASE / "version"
+        if version_file.exists():
+            info["version"] = version_file.read_text().strip()
+        else:
+            # 嘗試執行 zen --version
+            r = run([str(TARBALL_BINARY), "--version"], capture=True, check=False)
+            if r.returncode == 0:
+                info["version"] = r.stdout.strip()
+            else:
+                info["version"] = "unknown (installed, cannot query version)"
+
+    return info
+
+
+# ---- 安裝操作 ----
+
+
+def download_install_script(dest: Path) -> str:
+    """下載官方 install.sh，回傳檔案內容。"""
+    print(f"  下載官方安裝腳本...")
+    print(f"  URL: {OFFICIAL_INSTALL_URL}")
+    print()
+    # 使用 curl 串流下載到暫存檔，避免 pipe string 安全性問題
+    result = run(
+        [
+            "curl",
+            "-fsSL",
+            "--output",
+            str(dest),
+            OFFICIAL_INSTALL_URL,
+        ],
+        capture=True,
+        check=True,
+    )
+    return dest.read_text()
+
+
+def execute_install_script(content: str, dry_run: bool = True) -> None:
+    """將腳本內容寫入暫存檔並執行。"""
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".sh", delete=False
+    ) as tf:
+        tf.write(content)
+        script_path = tf.name
+
+    try:
+        if dry_run:
+            print(f"  [預覽] bash {script_path}")
+            print()
+            print("  腳本內容預覽（前 20 行）：")
+            print("  ────────")
+            for i, line in enumerate(content.splitlines()[:20], 1):
+                print(f"  {i}: {line}")
+            if len(content.splitlines()) > 20:
+                print(f"  ...（共 {len(content.splitlines())} 行）")
+            print("  ────────")
+        else:
+            print(f"  執行官方安裝腳本...")
+            run(["bash", script_path], check=True)
+            print()
+            print("  ✓ 安裝腳本執行完成")
+    finally:
+        Path(script_path).unlink(missing_ok=True)
+
+
+# ---- 移除操作 ----
+
+
+def remove_installation(dry_run: bool = True) -> None:
+    """移除使用者目錄中的 zen tarball 安裝與 wrapper。"""
+    installs = find_installation()
+
+    if not any(installs.values()):
+        print("  找不到 zen-browser 安裝，無需移除")
+        return
+
+    to_remove: list[tuple[str, Path]] = []
+    if installs["tarball"]:
+        to_remove.append(("tarball 安裝", TARBALL_BASE))
+    if installs["wrapper_zen"]:
+        to_remove.append(("wrapper (zen)", WRAPPER_PATHS[0]))
+    if installs["wrapper_zen_browser"]:
+        to_remove.append(("wrapper (zen-browser)", WRAPPER_PATHS[1]))
+    if installs["desktop_entry"]:
+        to_remove.append(("desktop launcher", DESKTOP_ENTRY_PATH))
+
+    print("  將移除以下項目：")
+    for label, path in to_remove:
+        print(f"    - {label}: {path}")
+    print()
+
+    if dry_run:
+        print("  [預覽] 實際刪除需要 --apply --remove")
+        return
+
+    # 實際刪除
+    for label, path in to_remove:
+        if path.is_dir():
+            print(f"  刪除目錄：{path}")
+            shutil.rmtree(path)
+        elif path.is_file() or path.is_symlink():
+            print(f"  刪除檔案：{path}")
+            path.unlink()
+        print(f"  ✓ {label} 已移除")
+
+
+# ---- CLI 入口 ----
+
+
+def main(
+    apply: Annotated[
+        bool,
+        typer.Option("--apply", help="實際執行變更（預設為預覽模式）"),
+    ] = False,
+    check: Annotated[
+        bool,
+        typer.Option("--check", "-c", help="檢查目前安裝狀態"),
+    ] = False,
+    remove: Annotated[
+        bool,
+        typer.Option("--remove", help="移除已安裝的 tarball 版本"),
+    ] = False,
+) -> None:
+    """Zen Browser 安裝工具（官方 tarball installer）"""
+    dry_run = not apply
+
+    print("=" * 60)
+    print("  Zen Browser 安裝工具")
+    print("=" * 60)
+    print()
+    print("  使用官方 tarball installer（非 RPM/Flatpak）")
+    print(f"  安裝腳本：{OFFICIAL_INSTALL_URL}")
+    print()
+
+    # 環境檢查
+    check_environment()
+
+    arch = subprocess.run(
+        ["uname", "-m"], capture_output=True, text=True
+    ).stdout.strip()
+    print(f"  平台：Linux {arch}")
+
+    # --check 模式
+    if check:
+        print()
+        installs = find_installation()
+        info = get_installed_info()
+
+        print("  安裝位置檢查：")
+        print(f"    ~/.tarball-installations/zen/zen  → {'已安裝' if installs['tarball'] else '未安裝'}")
+        print(f"    ~/.local/bin/zen                  → {'已安裝' if installs['wrapper_zen'] else '未安裝'}")
+        print(f"    ~/.local/bin/zen-browser          → {'已安裝' if installs['wrapper_zen_browser'] else '未安裝'}")
+        print(f"    ~/.local/share/applications/zen.desktop → {'已安裝' if installs['desktop_entry'] else '未安裝'}")
+
+        if installs["tarball"] and "version" in info:
+            print(f"\n  版本：{info['version']}")
+
+        print()
+        print("  (dry-run，不做任何變更)")
+        return
+
+    # --remove 模式
+    if remove:
+        print()
+        print("  移除模式（只處理使用者可寫的路徑）")
+        print()
+        remove_installation(dry_run=dry_run)
+        print()
+        print("  完成！")
+        return
+
+    # 安裝模式
+    installs = find_installation()
+
+    if installs["tarball"] and dry_run:
+        print()
+        print("  ✓ Zen Browser 已透過官方 tarball 安裝")
+        info = get_installed_info()
+        if "version" in info:
+            print(f"    版本：{info['version']}")
+        print()
+        print("  重新執行 --apply 可更新至最新版本")
+        print()
+        print("  (dry-run，無任何變更)")
+        return
+
+    # 未安裝或 --apply 更新，執行官方安裝流程
+    print()
+    if installs["tarball"]:
+        print("  更新流程：重新執行官方 install.sh")
+    else:
+        print("  安裝流程：下載官方 install.sh 並執行")
+    print()
+
+    with tempfile.NamedTemporaryFile(suffix=".sh", delete=False) as tf:
+        tmp_script = Path(tf.name)
+
+    try:
+        # 下載腳本
+        print("  步驟 1：下載官方安裝腳本")
+        download_install_script(tmp_script)
+        content = tmp_script.read_text()
+        print("  ✓ 下載完成")
+        print()
+
+        # 執行腳本
+        print("  步驟 2：執行安裝腳本")
+        execute_install_script(content, dry_run=dry_run)
+    finally:
+        tmp_script.unlink(missing_ok=True)
+
+    print()
+
+    if dry_run:
+        print("  預覽完成！若要實際執行，請加 --apply")
+        print()
+        print("  範例：")
+        print("    install-zen-browser --apply")
+    else:
+        installs = find_installation()
+        if installs["tarball"]:
+            print("  ✓ Zen Browser 安裝成功！")
+        else:
+            print(
+                "  ⚠ 安裝腳本執行完成，但找不到安裝檔",
+                file=sys.stderr,
+            )
+            raise typer.Exit(code=1)
+
+        print()
+        print("  啟動方式：")
+        if installs["wrapper_zen"]:
+            print(f"    {WRAPPER_PATHS[0]}")
+        if installs["wrapper_zen_browser"]:
+            print(f"    {WRAPPER_PATHS[1]}")
+        if installs["tarball"]:
+            print(f"    {TARBALL_BINARY}")
+        print()
+        print("  或從應用程式選單啟動")
+
+
+if __name__ == "__main__":
+    try:
+        typer.run(main)
+    except subprocess.CalledProcessError as e:
+        sys.exit(e.returncode)
+    except RuntimeError as e:
+        print(f"錯誤: {e}", file=sys.stderr)
+        sys.exit(1)
