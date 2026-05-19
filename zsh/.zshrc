@@ -116,6 +116,69 @@ alias m="mise"
 alias mi="mise install"
 alias mr="mise run"
 
+# SSH TERM 策略：日常連線優先遠端相容性，避免每台主機都安裝 xterm-kitty terminfo。
+# - auto（預設）：只有本機 TERM=xterm-kitty 時，ssh 連線自動降級成 xterm-256color
+# - native：保留原本 TERM，適合已管理 terminfo 的主機（MYCONFIG_SSH_TERM=native ssh host）
+# - xterm-256color：不論本機終端，一律使用通用 TERM
+__myconfig_ssh_term_command() {
+  case "${MYCONFIG_SSH_TERM:-auto}" in
+    native)
+      command "$@"
+      ;;
+    xterm-256color)
+      TERM=xterm-256color command "$@"
+      ;;
+    auto|*)
+      if [[ "$TERM" == xterm-kitty ]]; then
+        TERM=xterm-256color command "$@"
+      else
+        command "$@"
+      fi
+      ;;
+  esac
+}
+
+ssh() {
+  __myconfig_ssh_term_command ssh "$@"
+}
+
+__myconfig_is_gcloud_compute_ssh() {
+  local prev=""
+  local arg
+
+  for arg in "$@"; do
+    if [[ "$prev" == compute && "$arg" == ssh ]]; then
+      return 0
+    fi
+    prev="$arg"
+  done
+
+  return 1
+}
+
+gcloud() {
+  if __myconfig_is_gcloud_compute_ssh "$@"; then
+    __myconfig_ssh_term_command gcloud "$@"
+  else
+    command gcloud "$@"
+  fi
+}
+
+# 需要 Kitty shell integration / keyboard protocol 時手動 opt-in。
+# kitty kitten ssh 會幫遠端處理 terminfo；不在 Kitty 裡則退回原生 ssh。
+kssh() {
+  if [[ -n "$KITTY_PID" ]] && command -v kitty >/dev/null 2>&1; then
+    command kitty +kitten ssh "$@"
+  else
+    command ssh "$@"
+  fi
+}
+
+if (( $+functions[compdef] )); then
+  compdef _ssh ssh kssh
+  (( $+functions[_gcloud] )) && compdef _gcloud gcloud
+fi
+
 eval "$(~/.local/bin/mise activate zsh)"
 
 # 關閉 github cli 的翻頁
@@ -137,7 +200,7 @@ export PATH="$HOME/myconfig/commands:$PATH"
 export PATH="$PATH:/home/joker/.lmstudio/bin"
 export OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT=true
 
-# oh-my-openagent: 讓 Anthropic 模型使用 1M context limit（避免誤判為 200K）
-export ANTHROPIC_1M_CONTEXT=true
+# opencode
+export OPENCODE_ENABLE_EXA=1
 
 if command -v wt >/dev/null 2>&1; then eval "$(command wt config shell init zsh)"; fi

@@ -45,3 +45,13 @@ opencode 編輯檔案後透過 `formatters/` 下的 wrapper scripts 自動調用
 ## 新增工具設定
 
 建立以工具名稱命名的新子目錄，將設定檔放入其中。若有需要排除的檔案，在子目錄內建立 `.gitignore`。
+
+## SSH TERM 策略
+
+Kitty 會把本機 `TERM` 設成 `xterm-kitty`，但許多遠端主機沒有對應 terminfo。`zsh/.zshrc` 內的 `ssh()` / `gcloud compute ssh` wrapper 採用以下策略：
+
+- 預設 `auto`：只有本機 `TERM=xterm-kitty` 時，SSH 連線自動改用遠端普遍支援的 `xterm-256color`
+- 需要原生 Kitty terminfo 時：`MYCONFIG_SSH_TERM=native ssh host`
+- `gcloud compute ssh host` 也套用同一策略，因為 gcloud 會繼承 wrapper 設定後再呼叫 OpenSSH
+- 需要 Kitty shell integration / keyboard protocol 時：`kssh host`
+- 想永久固定相容模式時：`export MYCONFIG_SSH_TERM=xterm-256color`
