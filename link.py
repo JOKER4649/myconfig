@@ -55,6 +55,7 @@ LINKS: list[LinkEntry] = [
         "~/.config/autostart/fcitx5.desktop",
     ),
     LinkEntry("worktrunk/config.toml", "~/.config/worktrunk/config.toml"),
+    LinkEntry("agents", "~/.agents"),
 ]
 
 # ============================================================
