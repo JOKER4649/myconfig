@@ -18,7 +18,6 @@ yazi = "latest"
 claude = "latest"
 "npm:typescript-language-server" = "latest"
 "npm:portless" = "latest"
-"github:code-yeongyu/go-claude-code-comment-checker" = { version = "latest", exe = "comment-checker" }
 "pipx:mycli" = "latest"
 glab = { version = "latest", exe = "glab" }
 "npm:oxlint" = "latest"
@@ -30,6 +29,7 @@ act = "latest"
 codex = "latest"
 worktrunk = "latest"
 rg = "latest"
+lazydocker = "latest"
 
 [settings]
 npm.package_manager = "bun"
@@ -39,4 +39,4 @@ python.uv_venv_auto = true
 # dir = "tasks"
 
 [tasks.commit]
-run = "opencode run '提交當前變更, 如果必要, 進行分組'"
+run = """oc-quick "提交當前變更, 如果必要, 進行分組""""

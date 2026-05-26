@@ -184,6 +184,10 @@ eval "$(~/.local/bin/mise activate zsh)"
 # 關閉 github cli 的翻頁
 export GH_PAGER=cat
 
+# 讓 bat/less 在 kitty、zellij、tmux 的 alternate screen 中也能直接吃滑鼠滾輪。
+export LESS="--RAW-CONTROL-CHARS --quit-if-one-screen --mouse --wheel-lines=3"
+export BAT_PAGER="less --RAW-CONTROL-CHARS --quit-if-one-screen --mouse --wheel-lines=3"
+
 # portless: 使用 unprivileged port，避免 sudo（由 systemd user service 管理 proxy）
 export PORTLESS_PORT=1355
 
