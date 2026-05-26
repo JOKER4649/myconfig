@@ -5,7 +5,7 @@ description: 建立 `review ready` 的健壯 PR
 
 ## 建立 PR
 
-- 當前分支應為 `feat/[plan_name]` 或 `fix/[plan_name]` 之類的獨特名稱, 而不是 `main` 或 `master`
+- 當前分支不應該在預設分之上, 通常為 `main` 或 `master`
 - PR title, PR body 以繁體中文書寫
 - PR 應說明這完成了什麼功能/解決了什麼問題...等, 而不是解釋做了什麼
 - push 前在本地完成了檢查, 盡可能的減少 github actions 的負擔
@@ -38,4 +38,6 @@ description: 建立 `review ready` 的健壯 PR
   - PR title, PR body 充足的表達了意圖, 而不是解釋做了什麼
   - CI 全部通過
   - 所有 `AI PR review` 的評論已解決
+  - 所有合併衝突已解決
+  - 沒有任何阻礙合併的問題存在
   - changes 沒有臨時檔案/測試log之類的垃圾
