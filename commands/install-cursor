@@ -1,0 +1,388 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["typer", "httpx"]
+# ///
+"""Cursor IDE 安裝工具（AppImage installer, Linux 專用）
+
+使用官方 API 取得最新版本與下載網址，安裝到 ~/.local/bin/，
+並自動下載官方圖示與建立桌面捷徑。
+
+用法：
+    install-cursor              預覽模式（不實際變更系統）
+    install-cursor --apply      實際執行安裝或更新
+    install-cursor --check      檢查安裝狀態與可用更新
+    install-cursor --force      強制重新安裝（即使版本相同）
+    install-cursor --remove     移除已安裝版本
+"""
+
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+from typing import Annotated
+
+import httpx
+import typer
+
+# ---- 常數 ----
+
+API_URL = "https://cursor.com/api/download"
+ICON_URL = "https://cursor.com/favicon.svg"
+
+INSTALL_DIR = Path.home() / ".local" / "bin"
+BINARY_PATH = INSTALL_DIR / "cursor"
+VERSION_FILE = INSTALL_DIR / ".cursor-version"
+
+ICON_DIR = Path.home() / ".local" / "share" / "icons" / "hicolor" / "scalable" / "apps"
+ICON_PATH = ICON_DIR / "cursor.svg"
+
+DESKTOP_DIR = Path.home() / ".local" / "share" / "applications"
+DESKTOP_PATH = DESKTOP_DIR / "cursor.desktop"
+
+ARCH_MAP: dict[str, str] = {
+    "x86_64": "linux-x64",
+    "aarch64": "linux-arm64",
+}
+
+DESKTOP_ENTRY = """\
+[Desktop Entry]
+Name=Cursor
+Comment=AI-first Code Editor
+GenericName=Text Editor
+Exec={binary_path} --no-sandbox %F
+Icon={icon_path}
+Type=Application
+StartupNotify=true
+StartupWMClass=Cursor
+Categories=Utility;TextEditor;Development;IDE;
+MimeType=text/plain;inode/directory;
+Actions=new-empty-window;
+Keywords=cursor;code;editor;development;programming;
+
+[Desktop Action new-empty-window]
+Name=New Empty Window
+Exec={binary_path} --no-sandbox --new-window %F
+Icon={icon_path}
+"""
+
+
+# ---- 工具函式 ----
+
+
+def run(
+    cmd: list[str],
+    *,
+    check: bool = True,
+    capture: bool = False,
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(cmd, check=check, capture_output=capture, text=True)
+
+
+def get_arch() -> str:
+    return subprocess.run(
+        ["uname", "-m"], capture_output=True, text=True
+    ).stdout.strip()
+
+
+def check_environment() -> None:
+    if sys.platform != "linux":
+        print(f"此腳本僅支援 Linux（目前為 {sys.platform}）", file=sys.stderr)
+        sys.exit(1)
+
+    arch = get_arch()
+    if arch not in ARCH_MAP:
+        print(
+            f"此腳本僅支援 {', '.join(ARCH_MAP.keys())} 架構（目前為 {arch}）",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+
+# ---- API / 版本 ----
+
+
+def get_release_info(platform: str) -> tuple[str, str]:
+    """呼叫官方 API，回傳 (version, download_url)。"""
+    resp = httpx.get(
+        API_URL,
+        params={"platform": platform, "releaseTrack": "stable"},
+        timeout=30,
+        follow_redirects=True,
+    )
+    resp.raise_for_status()
+    data: dict = resp.json()
+
+    version: str = data["version"]
+    download_url: str = data["downloadUrl"]
+
+    if not download_url:
+        raise RuntimeError(f"API 回應中缺少 downloadUrl 欄位：{data}")
+
+    return version, download_url
+
+
+def get_installed_version() -> str | None:
+    if not BINARY_PATH.exists():
+        return None
+    if VERSION_FILE.exists():
+        ver = VERSION_FILE.read_text().strip()
+        if ver:
+            return ver
+
+    try:
+        result = run([str(BINARY_PATH), "--version"], capture=True)
+        return result.stdout.strip().splitlines()[0]
+    except (subprocess.CalledProcessError, OSError):
+        return "unknown"
+
+
+# ---- 下載 ----
+
+
+def download_file(url: str, dest: Path, label: str = "下載") -> None:
+    with httpx.stream("GET", url, follow_redirects=True, timeout=300) as resp:
+        resp.raise_for_status()
+        total = int(resp.headers.get("content-length", 0))
+        downloaded = 0
+        with open(dest, "wb") as f:
+            for chunk in resp.iter_bytes(chunk_size=65536):
+                f.write(chunk)
+                downloaded += len(chunk)
+                if total:
+                    pct = downloaded * 100 // total
+                    mb_down = downloaded / 1024 / 1024
+                    mb_total = total / 1024 / 1024
+                    print(
+                        f"\r  {label}進度: {pct}% ({mb_down:.1f}/{mb_total:.1f} MB)",
+                        end="",
+                        flush=True,
+                    )
+        if total:
+            print()
+
+
+def download_icon(dry_run: bool) -> None:
+    if ICON_PATH.exists():
+        print(f"  · 圖示已存在: {ICON_PATH}")
+        return
+
+    if dry_run:
+        print(f"  [預覽] 將下載圖示 {ICON_URL} → {ICON_PATH}")
+        return
+
+    print(f"  下載圖示: {ICON_URL}")
+    ICON_DIR.mkdir(parents=True, exist_ok=True)
+    download_file(ICON_URL, ICON_PATH, label="圖示")
+
+
+# ---- 桌面捷徑 ----
+
+
+def create_desktop_entry(dry_run: bool) -> None:
+    content = DESKTOP_ENTRY.format(
+        binary_path=BINARY_PATH,
+        icon_path=ICON_PATH,
+    )
+
+    if DESKTOP_PATH.exists():
+        if DESKTOP_PATH.read_text() == content:
+            print(f"  · 桌面捷徑已是最新: {DESKTOP_PATH}")
+            return
+
+    if dry_run:
+        verb = "更新" if DESKTOP_PATH.exists() else "建立"
+        print(f"  [預覽] 將{verb}桌面捷徑: {DESKTOP_PATH}")
+        return
+
+    DESKTOP_DIR.mkdir(parents=True, exist_ok=True)
+    DESKTOP_PATH.write_text(content)
+    verb = "更新" if DESKTOP_PATH.exists() else "建立"
+    print(f"  ✓ 桌面捷徑已{verb}: {DESKTOP_PATH}")
+
+
+# ---- 移除 ----
+
+
+def remove_installation(dry_run: bool) -> None:
+    items: list[tuple[str, Path]] = []
+
+    for label, path in [
+        ("AppImage 執行檔", BINARY_PATH),
+        ("版本記錄", VERSION_FILE),
+        ("圖示", ICON_PATH),
+        ("桌面捷徑", DESKTOP_PATH),
+    ]:
+        if path.exists():
+            items.append((label, path))
+
+    if not items:
+        print("  找不到 Cursor 安裝，無需移除")
+        return
+
+    print("  將移除以下項目：")
+    for label, path in items:
+        print(f"    - {label}: {path}")
+    print()
+
+    if dry_run:
+        print("  [預覽] 實際刪除需要 --apply --remove")
+        return
+
+    for label, path in items:
+        path.unlink(missing_ok=True)
+        print(f"  ✓ {label} 已移除")
+
+
+# ---- CLI 入口 ----
+
+
+def main(
+    apply: Annotated[
+        bool,
+        typer.Option("--apply", help="實際執行變更（預設為預覽模式）"),
+    ] = False,
+    check: Annotated[
+        bool,
+        typer.Option("--check", "-c", help="檢查安裝狀態與可用更新"),
+    ] = False,
+    force: Annotated[
+        bool,
+        typer.Option("--force", "-f", help="強制重新安裝，即使版本相同"),
+    ] = False,
+    remove: Annotated[
+        bool,
+        typer.Option("--remove", help="移除已安裝版本"),
+    ] = False,
+) -> None:
+    """Cursor IDE 安裝工具（官方 AppImage, 使用者本機 ~/.local/）
+
+    從 api.cursor.com 取得最新版本資訊，下載 AppImage 並安裝。
+    """
+    dry_run = not apply
+
+    check_environment()
+
+    arch = get_arch()
+    print(f"平台: Linux {arch}")
+
+    # --remove
+    if remove:
+        print()
+        remove_installation(dry_run)
+        print()
+        if dry_run:
+            print("預覽完成！若要實際移除，請加 --apply --remove")
+        else:
+            print("✓ Cursor 已移除")
+        raise typer.Exit()
+
+    # --check
+    current = get_installed_version()
+
+    if check:
+        print(f"目前版本: {current or '未安裝'}")
+        print(f"安裝位置: {BINARY_PATH}")
+        print(f"  AppImage:  {'✓ 已安裝' if BINARY_PATH.exists() else '✗ 未安裝'}")
+        print(f"  圖示:     {'✓ 已安裝' if ICON_PATH.exists() else '✗ 未安裝'}")
+        print(f"  桌面捷徑: {'✓ 已安裝' if DESKTOP_PATH.exists() else '✗ 未安裝'}")
+
+        try:
+            latest_version, _ = get_release_info(ARCH_MAP[arch])
+            if current and current != latest_version:
+                print(f"\n有新版本可用: {current} → {latest_version}")
+            elif current:
+                print(f"\n✓ 已經是最新版本 ({latest_version})")
+        except SystemExit:
+            pass
+
+        raise typer.Exit()
+
+    # 取得最新版資訊
+    current = get_installed_version()
+    print(f"目前版本: {current or '未安裝'}")
+    print("檢查最新版本中...")
+
+    latest_version, download_url = get_release_info(ARCH_MAP[arch])
+    print(f"最新版本: {latest_version}")
+
+    need_download = current != latest_version or force
+
+    if not need_download:
+        print(f"\n✓ 已經是最新版本 ({latest_version})")
+
+        need_icon = not ICON_PATH.exists()
+        need_desktop = not DESKTOP_PATH.exists()
+
+        if need_icon or need_desktop:
+            print()
+            if need_icon:
+                download_icon(dry_run)
+            if need_desktop:
+                create_desktop_entry(dry_run)
+            if dry_run:
+                print("\n預覽完成！若要實際執行，請加 --apply")
+
+        raise typer.Exit()
+
+    if dry_run:
+        print(f"\n[預覽] 將下載 Cursor {latest_version} AppImage")
+        print(f"  下載網址: {download_url}")
+        print(f"  安裝位置: {BINARY_PATH}")
+        if not ICON_PATH.exists():
+            print(f"  圖示: 將下載 {ICON_URL}")
+        print(f"  桌面捷徑: {DESKTOP_PATH}")
+        print(f"\n預覽完成！若要實際安裝，請加 --apply")
+        raise typer.Exit()
+
+    # ---- 實際安裝 ----
+    print(f"\n下載 Cursor {latest_version} AppImage 中...")
+    print(f"URL: {download_url}")
+    print()
+
+    INSTALL_DIR.mkdir(parents=True, exist_ok=True)
+
+    tmp_path = BINARY_PATH.with_suffix(".tmp")
+    try:
+        download_file(download_url, tmp_path, label="下載")
+        tmp_path.chmod(0o755)
+
+        print("  安裝 AppImage...")
+        shutil.move(str(tmp_path), str(BINARY_PATH))
+        BINARY_PATH.chmod(0o755)
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+    VERSION_FILE.write_text(latest_version)
+
+    print()
+    download_icon(dry_run=False)
+
+    create_desktop_entry(dry_run=False)
+
+    # 驗證
+    try:
+        result = run([str(BINARY_PATH), "--version"], capture=True)
+        installed_ver = result.stdout.strip().splitlines()[0]
+        print(f"\n✓ Cursor {installed_ver} 安裝成功")
+    except subprocess.CalledProcessError:
+        print(
+            "\n⚠ 警告：無法執行 --version 驗證，但檔案已下載完成",
+            file=sys.stderr,
+        )
+        print(f"✓ Cursor {latest_version} AppImage 已安裝至 {BINARY_PATH}")
+
+    print()
+    print("啟動方式：")
+    print(f"  {BINARY_PATH}")
+    print("  或從應用程式選單啟動（可能需要重新登入才能看到捷徑）")
+
+
+if __name__ == "__main__":
+    try:
+        typer.run(main)
+    except subprocess.CalledProcessError as e:
+        sys.exit(e.returncode)
+    except httpx.HTTPError as e:
+        print(f"網路錯誤: {e}", file=sys.stderr)
+        sys.exit(1)
