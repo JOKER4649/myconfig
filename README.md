@@ -25,6 +25,22 @@
 | `agents/` | [OpenCode Skills](https://opencode.ai/docs/skills) ── 使用者安裝的 agent skills |
 
 
+## mise 自訂插件
+
+此倉庫包含自訂 mise 插件，用於管理未收錄在官方 registry 的工具。
+
+### cursor-agent
+
+Cursor Agent CLI 插件，從 [cursor.com](https://cursor.com) 官方下載安裝。
+
+首次設定需手動連結插件：
+
+```bash
+mise plugins link cursor-agent ~/myconfig/mise/plugins/cursor-agent
+```
+
+之後 `mise install` 會自動安裝 `mise/config.toml` 中宣告的 `cursor-agent`。
+
 ## 新增工具設定
 
 建立以工具名稱命名的新子目錄，將設定檔放入其中。若有需要排除的檔案，在子目錄內建立 `.gitignore`。
