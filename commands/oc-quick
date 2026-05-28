@@ -1,3 +1,4 @@
 #!/usr/bin/env bash
 # oc-quick — thin wrapper for opencode with fast model
-exec opencode run --model opencode-go/deepseek-v4-flash --variant high "$@"
+exec opencode run --agent quick "$@"
+#exec opencode run --model opencode-go/deepseek-v4-flash --variant high "$@"
