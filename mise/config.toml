@@ -39,4 +39,4 @@ python.uv_venv_auto = true
 # dir = "tasks"
 
 [tasks.commit]
-run = """oc-quick "提交當前變更, 如果必要, 進行分組""""
+run = """oc-quick "提交當前變更, 每一組 commit 在功能面上足夠原子""""
