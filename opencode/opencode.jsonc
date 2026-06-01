@@ -57,13 +57,15 @@
       "disable": true,
     },
     "query-a": {
-      "description": "",
+      "description": "快速且便宜的本地/遠端程式碼、文檔、事實、資訊等",
+      "mode": "subagent",
       "prompt": "{file:./agents/query-a.md}",
       "model": "opencode-go/deepseek-v4-flash",
       "variant": "high",
     },
     "query-b": {
-      "description": "",
+      "description": "快速且便宜的本地/遠端程式碼、文檔、事實、資訊等",
+      "mode": "subagent",
       "prompt": "{file:./agents/query-a.md}",
       "model": "opencode-go/mimo-v2.5",
       "variant": "high",
