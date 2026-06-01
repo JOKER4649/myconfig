@@ -1,5 +1,5 @@
 ---
-description: 快速簡單工具處理agent
+description: 簡單任務處理者
 mode: all
 model: opencode-go/deepseek-v4-pro
 variant: high
@@ -54,5 +54,8 @@ Issue:
 Status: FINISH
 
 Walkthrough:
+- ...
+
+Note: [如果有]
 - ...
 ```
