@@ -8,10 +8,10 @@
     "@slkiser/opencode-quota@latest",
     "@rama_nigg/open-cursor@latest",
   ],
-  "autoupdate": true,
-  "default_agent": "Hephaestus - Deep Agent",
+  "autoupdate": false,
+  "default_agent": "quick",
   "model": "opencode-go/deepseek-v4-pro",
-  "small_model": "opencode-go/deepseek-v4-flash",
+  "small_model": "opencode/big-pickle",
   "permission": {
     "bash": {
       "pkill -f *": "deny",
