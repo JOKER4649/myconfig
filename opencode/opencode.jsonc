@@ -56,6 +56,18 @@
     "build": {
       "disable": true,
     },
+    "query-a": {
+      "description": "",
+      "prompt": "{file:./agents/query-a.md}",
+      "model": "opencode-go/deepseek-v4-flash",
+      "variant": "high",
+    },
+    "query-b": {
+      "description": "",
+      "prompt": "{file:./agents/query-a.md}",
+      "model": "opencode-go/mimo-v2.5",
+      "variant": "high",
+    },
   },
   "lsp": true,
   "mcp": {},
