@@ -1,6 +1,6 @@
 {
   "$schema": "https://opencode.ai/tui.json",
-  "theme": "nord",
+  "theme": "nord-transparent",
   "keybinds": {},
   "scroll_speed": 3,
   "scroll_acceleration": {
