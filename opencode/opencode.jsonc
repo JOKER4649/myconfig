@@ -16,6 +16,11 @@
     "bash": {
       "pkill -f *": "deny",
     },
+    "task": {
+      "*": "deny",
+      "query-*": "allow",
+      "oracle": "allow",
+    },
     // 工作目錄外的檔案存取：「家目錄全允許 + 敏感例外」策略
     // 順序敏感：opencode 採「最後 match 勝出」，deny/ask 例外必須放在 allow 之後
     "external_directory": {
@@ -64,7 +69,7 @@
       "variant": "high",
     },
     "query-b": {
-      "description": "快速且便宜的本地/遠端程式碼、文檔、事實、資訊等，同樣的查詢也並行委託 `query-a` 來交叉比對",
+      "description": "query-a 的平行交叉比對",
       "mode": "subagent",
       "prompt": "{file:./agents/query-a.md}",
       "model": "opencode-go/mimo-v2.5",
