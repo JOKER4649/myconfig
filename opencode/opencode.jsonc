@@ -7,7 +7,8 @@
     "opencode-zellij@latest",
     "@slkiser/opencode-quota@latest",
     // "@rama_nigg/open-cursor@latest",  // replaced by real acp plugin below
-    "./plugin/cursor-acp-proxy/plugin.ts",
+    // 自研 cursor-acp-proxy：內嵌 HTTP :32125，opencode provider 指向這裡
+    "./plugin/cursor-acp-proxy/plugin.ts"
   ],
   "autoupdate": false,
   "default_agent": "quick",
@@ -79,6 +80,7 @@
   },
   "lsp": true,
   "mcp": {},
+  // cursor-acp：自研 plugin 在 :32125 啟動 HTTP server，opencode 透過自訂 provider 連線
   "provider": {
     "cursor-acp": {
       "name": "Cursor ACP",
