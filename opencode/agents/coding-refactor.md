@@ -1,7 +1,7 @@
 ---
 description: 程式碼重構
 mode: subagent
-model: opencode-go/minimax-m3
+model: cursor-acp/composer-2.5
 ---
 
 ## 職責
