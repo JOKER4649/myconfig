@@ -30,6 +30,7 @@ cursor-agent = "latest"
 worktrunk = "latest"
 rg = "latest"
 lazydocker = "latest"
+"npm:@openchamber/web" = "latest"
 
 [settings]
 npm.package_manager = "bun"
