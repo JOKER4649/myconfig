@@ -1,6 +1,6 @@
 ---
-name: create-strong-pr
-description: 建立 `review ready` 的健壯 PR
+name: github-create-pr
+description: 建立 `review ready` 的健壯 github PR
 ---
 
 ## 建立 PR
