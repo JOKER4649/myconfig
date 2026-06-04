@@ -31,6 +31,7 @@ worktrunk = "latest"
 rg = "latest"
 lazydocker = "latest"
 "npm:@openchamber/web" = "latest"
+"github:pranshuparmar/witr" = "latest"
 
 [settings]
 npm.package_manager = "bun"
