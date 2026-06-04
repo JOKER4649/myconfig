@@ -1,7 +1,7 @@
 ---
 description: 編碼協調者
 mode: primary
-model: opencode-go/minimax-m3
+model: minimax-coding-plan/MiniMax-M3
 variant: high
 permission:
   task:

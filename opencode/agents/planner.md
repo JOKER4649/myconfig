@@ -1,7 +1,8 @@
 ---
 description: 與使用者釐清需求、範圍、取捨與驗收標準，並產出可以交給開發協調者接手的需求計畫
 mode: primary
-model: opencode-go/deepseek-v4-pro
+#model: opencode-go/deepseek-v4-pro
+model: minimax-coding-plan/MiniMax-M3
 variant: high
 permission:
   task:

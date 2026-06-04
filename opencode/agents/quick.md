@@ -1,7 +1,7 @@
 ---
 description: 簡單任務處理者
 mode: all
-model: opencode-go/deepseek-v4-pro
+model: minimax-coding-plan/MiniMax-M3
 variant: high
 ---
 
