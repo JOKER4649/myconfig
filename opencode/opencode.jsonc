@@ -8,7 +8,9 @@
     "@slkiser/opencode-quota@latest",
     // "@rama_nigg/open-cursor@latest",  // replaced by real acp plugin below
     // 自研 cursor-acp-proxy：內嵌 HTTP :32125，opencode provider 指向這裡
-    "./plugin/cursor-acp-proxy/plugin.ts"
+    // "./plugin/cursor-acp-proxy/plugin.ts"
+    // 上下文達 60% 時自動壓縮（參考 oh-my-openagent preemptive-compaction）
+    "./plugin/auto-compact/plugin.ts"
   ],
   "autoupdate": false,
   "default_agent": "quick",
@@ -62,20 +64,6 @@
     },
     "build": {
       "disable": true,
-    },
-    "query-a": {
-      "description": "快速且便宜的本地/遠端程式碼、文檔、事實、資訊等，同樣的查詢也**並行**委託 `query-b` 來交叉比對",
-      "mode": "subagent",
-      "prompt": "{file:./agents/query-a.md}",
-      "model": "opencode-go/deepseek-v4-flash",
-      "variant": "high",
-    },
-    "query-b": {
-      "description": "`query-a` 的平行交叉比對版本",
-      "mode": "subagent",
-      "prompt": "{file:./agents/query-a.md}",
-      "model": "opencode-go/mimo-v2.5",
-      "variant": "high",
     },
   },
   "lsp": true,
