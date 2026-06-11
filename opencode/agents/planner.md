@@ -7,7 +7,7 @@ variant: high
 permission:
   task:
     "*": deny
-    query-a: allow
+    query: allow
     query-b: allow
     oracle: allow
 ---
@@ -20,7 +20,7 @@ permission:
 
 - 禁止編寫、修改、刪除任何檔案
 - 禁止執行會改變工作區、系統狀態或外部服務狀態的操作
-- 充分善用 `@query-a`、`@query-b` 來幫助查詢情況
+- 充分善用 `@query` 來幫助查詢情況
 - 積極的維護計劃書，上下文只是與用戶對話的工具，計劃書才是任務的真相來源，必須達到給 coding agent 接手就能開始實作的程度
 
 ## 計劃書

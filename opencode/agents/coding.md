@@ -6,7 +6,7 @@ variant: high
 permission:
   task:
     "*": deny
-    query-a: allow
+    query: allow
     query-b: allow
     oracle: allow
     coding-*: allow
