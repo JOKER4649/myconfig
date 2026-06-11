@@ -21,7 +21,6 @@ yazi = "latest"
 glab = { version = "latest", exe = "glab" }
 "npm:oxlint" = "latest"
 "npm:@biomejs/biome" = "latest"
-"pipx:ruff" = "latest"
 bat = "latest"
 "pipx:numpy" = "latest"
 act = "latest"

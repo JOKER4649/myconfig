@@ -16,7 +16,6 @@
 | `kitty/` | [kitty](https://sw.kovidgoyal.net/kitty/) GPU 加速終端機設定（Catppuccin Mocha 主題） |
 | `biome/` | [Biome](https://biomejs.dev) 全局 formatter 配置（TS/JS/JSON/CSS） |
 | `prettier/` | [Prettier](https://prettier.io) 全局 formatter 配置 + plugins（Vue/Astro/Svelte/MD/YAML） |
-| `ruff/` | [Ruff](https://docs.astral.sh/ruff/) 全局 Python formatter 配置 |
 | `backup/` | 每日自動備份腳本（cron 排程，自動 commit + push） |
 | `systemd/` | systemd user service 設定（opencode-web、portless-proxy 等） |
 | `environment.d/` | systemd user 環境變數（`~/.config/environment.d/`） |
