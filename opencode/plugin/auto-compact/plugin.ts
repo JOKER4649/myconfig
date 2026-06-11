@@ -91,7 +91,11 @@ async function refreshLimitsFromApi(
   limits: Map<string, number>,
 ): Promise<void> {
   try {
-    const result = await client.provider.list({ query: { directory } });
+    const result = await withTimeout(
+      client.provider.list({ query: { directory } }),
+      5_000,
+      "provider.list timed out",
+    );
     const providers = result.data?.all;
     if (!providers) return;
 
@@ -148,9 +152,19 @@ const plugin: Plugin = async (ctx) => {
   const compactionInProgress = new Set<string>();
   const compactedSessions = new Set<string>();
   const lastCompactionTime = new Map<string, number>();
+  let limitsRefresh: Promise<void> | null = null;
 
-  await refreshLimitsFromApi(ctx.client, ctx.directory, contextLimits);
-  log("plugin loaded", { threshold: THRESHOLD, knownLimits: contextLimits.size });
+  const ensureContextLimits = async (): Promise<void> => {
+    if (contextLimits.size > 0) return;
+    if (!limitsRefresh) {
+      limitsRefresh = refreshLimitsFromApi(ctx.client, ctx.directory, contextLimits).finally(() => {
+        limitsRefresh = null;
+      });
+    }
+    await limitsRefresh;
+  };
+
+  log("plugin loaded", { threshold: THRESHOLD });
 
   const runCompactionIfNeeded = async (sessionID: string): Promise<void> => {
     if (compactedSessions.has(sessionID) || compactionInProgress.has(sessionID)) return;
@@ -160,6 +174,8 @@ const plugin: Plugin = async (ctx) => {
 
     const cached = tokenCache.get(sessionID);
     if (!cached?.modelID) return;
+
+    await ensureContextLimits();
 
     const contextLimit = resolveContextLimit(cached.providerID, cached.modelID, contextLimits);
     if (contextLimit === null) {
@@ -264,6 +280,8 @@ const plugin: Plugin = async (ctx) => {
     async config(input) {
       collectLimitsFromConfig(input, contextLimits);
       log("config hook: limits updated", { knownLimits: contextLimits.size });
+      // 背景刷新 provider API 的 limit，不阻塞啟動
+      void refreshLimitsFromApi(ctx.client, ctx.directory, contextLimits);
     },
 
     async event({ event }) {
