@@ -32,6 +32,8 @@ rg = "latest"
 lazydocker = "latest"
 "npm:@openchamber/web" = "latest"
 "github:pranshuparmar/witr" = "latest"
+wrangler = { version = "latest", allow_builds = ["esbuild", "sharp", "workerd"] }
+herdr = "latest"
 
 [settings]
 npm.package_manager = "bun"
