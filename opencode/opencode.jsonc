@@ -15,7 +15,7 @@
   "autoupdate": false,
   "default_agent": "quick",
   "model": "opencode-go/deepseek-v4-pro",
-  "small_model": "opencode/big-pickle",
+  "small_model": "opencode-go/deepseek-v4-flash",
   "permission": {
     "bash": {
       "pkill -f *": "deny",
