@@ -33,6 +33,7 @@ lazydocker = "latest"
 "github:pranshuparmar/witr" = "latest"
 wrangler = { version = "latest", allow_builds = ["esbuild", "sharp", "workerd"] }
 herdr = "latest"
+cloud-sql-proxy = "2.22.1"
 
 [settings]
 npm.package_manager = "bun"
