@@ -55,11 +55,15 @@ Issue:
 ### 完成
 
 ```markdown
-Status: FINISH
-
 Walkthrough:
 - ...
 
 Note: [如果有]
 - ...
+
+Status: FINISH
+
+TL;DR:
+
+[易懂的總結]
 ```
