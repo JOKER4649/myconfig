@@ -22,7 +22,7 @@
     },
     "task": {
       "*": "deny",
-      "query-*": "allow",
+      "query": "allow",
       "oracle": "allow",
     },
     // 工作目錄外的檔案存取：「家目錄全允許 + 敏感例外」策略

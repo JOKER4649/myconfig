@@ -7,7 +7,6 @@ permission:
   task:
     "*": deny
     query: allow
-    query-b: allow
     oracle: allow
     coding-*: allow
     quick: allow
