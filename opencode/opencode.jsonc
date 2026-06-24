@@ -1,18 +1,11 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "plugin": [
-    // "oh-my-openagent@latest",
-    // "oh-my-opencode-slim",
-    // "@ex-machina/opencode-anthropic-auth",
     "opencode-zellij@latest",
     "@slkiser/opencode-quota@latest",
-    // "@rama_nigg/open-cursor@latest",  // replaced by real acp plugin below
-    // 自研 cursor-acp-proxy：內嵌 HTTP :32125，opencode provider 指向這裡
-    // "./plugin/cursor-acp-proxy/plugin.ts"
-    // 上下文達 60% 時自動壓縮（參考 oh-my-openagent preemptive-compaction）
-    "./plugin/auto-compact/plugin.ts"
+    // "oh-my-openagent@latest"
   ],
-  "autoupdate": false,
+  "autoupdate": true,
   "default_agent": "quick",
   "model": "opencode-go/deepseek-v4-pro",
   "small_model": "opencode-go/deepseek-v4-flash",
@@ -22,8 +15,8 @@
     },
     "task": {
       "*": "deny",
-      "query": "allow",
       "oracle": "allow",
+      "explore": "allow",
     },
     // 工作目錄外的檔案存取：「家目錄全允許 + 敏感例外」策略
     // 順序敏感：opencode 採「最後 match 勝出」，deny/ask 例外必須放在 allow 之後
@@ -31,31 +24,18 @@
       // 家目錄與系統 temp：myconfig 管理 dotfile 的主場
       "~/**": "allow",
       "/tmp/**": "allow",
-      "/var/tmp/**": "allow",
       // 高敏感金鑰類 → deny（外洩無法 revoke 重發）
       "~/.ssh/id_*": "deny",
       "~/.ssh/*.pem": "deny",
-      "~/.gnupg/**": "deny",
-      "~/.password-store/**": "deny",
-      "~/.config/sops/**": "deny",
       // Token / credential 類 → ask（除錯時可手動放行，外洩可 revoke）
-      "~/.aws/credentials*": "ask",
       "~/.config/gh/hosts.yml": "ask",
       "~/.config/gcloud/credentials*": "ask",
       "~/.config/gcloud/legacy_credentials/**": "ask",
       "~/.netrc": "ask",
-      "~/.pgpass": "ask",
-      "~/.kube/config": "ask",
       "~/.docker/config.json": "ask",
-      "~/.npmrc": "ask",
-      "~/.pnpmrc": "ask",
-      "~/.yarnrc": "ask",
     },
   },
   "agent": {
-    "explore": {
-      "disable": true,
-    },
     "general": {
       "disable": true,
     },
@@ -66,39 +46,8 @@
       "disable": true,
     },
   },
-  "lsp": true,
+  "lsp": false,
   "mcp": {},
-  // cursor-acp：自研 plugin 在 :32125 啟動 HTTP server，opencode 透過自訂 provider 連線
-  "provider": {
-    "cursor-acp": {
-      "name": "Cursor ACP",
-      "npm": "@ai-sdk/openai-compatible",
-      "options": {
-        "baseURL": "http://127.0.0.1:32125/v1",
-      },
-      "models": {
-        "auto": { "name": "Auto" },
-
-        "claude-opus-4-7": { "name": "Claude 4.7 Opus" },
-        "claude-4.6-sonnet": { "name": "Claude 4.6 Sonnet" },
-
-        "gpt-5.5": { "name": "GPT-5.5" },
-        "gpt-5.4": { "name": "GPT-5.4" },
-        "gpt-5.4-mini": { "name": "GPT-5.4 Mini" },
-        "gpt-5.4-nano": { "name": "GPT-5.4 Nano" },
-        "gpt-5.3-codex": { "name": "GPT-5.3 Codex" },
-
-        "gemini-3.1-pro": { "name": "Gemini 3.1 Pro" },
-        "gemini-3-flash": { "name": "Gemini 3 Flash" },
-
-        "composer-2.5": { "name": "Composer 2.5" },
-        "composer-2.5-fast": { "name": "Composer 2.5 Fast" },
-
-        "grok-4.3": { "name": "Grok 4.3" },
-        "kimi-k2.5": { "name": "Kimi K2.5" },
-      },
-    },
-  },
   "experimental": {
     "quotaToast": {
       "enableToast": false,
