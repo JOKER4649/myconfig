@@ -208,3 +208,6 @@ export OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT=true
 export OPENCODE_ENABLE_EXA=1
 
 if command -v wt >/dev/null 2>&1; then eval "$(command wt config shell init zsh)"; fi
+
+# opencode
+export PATH=/home/joker/.opencode/bin:$PATH
