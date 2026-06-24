@@ -1,15 +1,31 @@
-## User preference
-- 與用戶溝通使用 `繁體中文`，程式碼使用 `簡體中文`
-- 程式碼: 可讀性 > 最小變更 > 可靠性 > 性能
-  - 當既有 package 可以解決問題, 就不要造輪子, 哪怕會增加 dist 大小
-- 如果資料庫可以解決的事情, 就不要引入其他外部功能/概念
-- 默認使用 github , issue / pr 是指 github issue / github pr
+## 防止破壞 (非常重要)
 
-## 善用工具
+執行可能變更系統狀態，刪除或覆蓋檔案等危險操作時需格外小心，防止造成用戶的損失。除非在預期中或是用戶明確指示刪除。
 
-### SKILL (agent-skills)
+### git 變更
+- 如果包含在歷史中，這是安全的
+- 如果不是期望中的未提交變更，不處理，這可能是其他 session 留下的，如果阻礙 git 操作可放到 stash 中
 
-SKILL 是既有的標準化工作流，應充分利用，如果沒有載入但重複發明方法是在浪費時間與成本重新發明輪子。
+### 不被 git 保護的檔案
 
-每輪對話開始或多個步驟(階段)變更時，考慮加載相關 SKILL
+- 考慮使用 `mv` 替代 `rm`，放到 `.delete/[相對路徑]`
 
+### 系統變更
+
+- 考慮先快照或備份，但需要評估成本
+- 考慮將`儲存資料`作為一般檔案來處理
+
+### 其他
+
+問用戶
+
+## 常用工具
+
+- `mise`: tool、task 管理
+- `gh`: GitHub CLI
+- `glab`: GitLab CLI
+- `mycli`: MySQL CLI
+- `act`: GitHub Actions CLI (mock)
+- `gcloud`: Google Cloud CLI
+- `agent-browser`: Browser automation CLI
+- `cloud-sql-proxy`: Cloud SQL Proxy CLI
