@@ -7,6 +7,3 @@
 
 # herdr 安裝的整合檔（自動生成，不應手動追蹤）
 opencode/plugins/herdr-*.js
-
-# 本地審計/快取日誌
-audit.json
