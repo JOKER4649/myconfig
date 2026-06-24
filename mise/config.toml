@@ -3,7 +3,6 @@ node = "lts"
 bun = "latest"
 gcloud = 'latest'
 github-cli = 'latest'
-opencode = "latest"
 "npm:@antfu/ni" = "latest"
 pnpm = 'latest'
 "pipx:httpie" = "latest"
@@ -19,21 +18,16 @@ yazi = "latest"
 "npm:portless" = "latest"
 "pipx:mycli" = "latest"
 glab = { version = "latest", exe = "glab" }
-"npm:oxlint" = "latest"
-"npm:@biomejs/biome" = "latest"
 bat = "latest"
 "pipx:numpy" = "latest"
 act = "latest"
-codex = "latest"
 cursor-agent = "latest"
 worktrunk = "latest"
 rg = "latest"
 lazydocker = "latest"
-"npm:@openchamber/web" = "latest"
-"github:pranshuparmar/witr" = "latest"
 wrangler = { version = "latest", allow_builds = ["esbuild", "sharp", "workerd"] }
-herdr = "latest"
 cloud-sql-proxy = "2.22.1"
+"npm:@openchamber/web" = "latest"
 
 [settings]
 npm.package_manager = "bun"
