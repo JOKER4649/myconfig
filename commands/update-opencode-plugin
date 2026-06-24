@@ -1,0 +1,552 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.12"
+# dependencies = ["typer"]
+# ///
+"""update-opencode-plugin — 以 opencode.jsonc 為 single source of truth 更新 plugin 快取。
+
+解析 `opencode.jsonc` 的 `plugin` 陣列，只處理**啟用中**的 npm plugin：
+  - 已註解或移除的 plugin 不會被自動更新（除非加 `--prune` 連快取一起清）
+  - 新加入的 plugin 若快取不存在，會自動 `bun add` 補裝
+
+每個 plugin 會在 `~/.cache/opencode/packages/` 下維護自己的 `<name>@latest` 目錄，
+裡面只有 marker `package.json`（固化實際版本）；實體依賴上提到共享的 `node_modules`。
+`bun.lock` 會在每次更新前刪除以強制重新解析 `@latest`。
+
+用法：
+    update-opencode-plugin                 實際更新啟用的 plugin
+    update-opencode-plugin -n              預覽模式
+    update-opencode-plugin -p              連同被註解 plugin 的快取一起清
+    update-opencode-plugin -c              連同舊版號快取目錄一起清
+    update-opencode-plugin -N              僅清除快取，不重裝
+    update-opencode-plugin -C path/to/cfg  指定 opencode 設定檔
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+from typing import Annotated, NamedTuple
+
+import typer
+
+# 預設路徑
+PACKAGES_DIR = Path.home() / ".cache" / "opencode" / "packages"
+LOCKFILE = PACKAGES_DIR / "bun.lock"
+DEFAULT_CONFIG = Path.home() / ".config" / "opencode" / "opencode.jsonc"
+
+# 合法版號字元（首字數字，其後數字 . _ + -）
+_VERSION_CHAR_RE = re.compile(r"^[0-9][0-9._+\-]*$")
+# 從 bun 輸出抓 "installed <pkg>@<ver>" 的版本段
+_INSTALLED_RE = re.compile(
+    r"installed (?P<pkg>\S+)@(?P<ver>[0-9][0-9._+\-]*)"
+)
+
+
+# ── JSONC 與 plugin 名稱輔助 ────────────────────────────────────────────
+
+
+def strip_jsonc_comments(text: str) -> str:
+    """移除 JSONC 註解（`//` 與 `/* */`），保留字串內的 `//` 與 `/*`。
+
+    走一遍字元：
+      - 進到 `"` 後整段原樣保留（含 escape `\\`）
+      - `/* ... */` 多行註解整段跳過
+      - `// ...` 行註解到換行為止
+    """
+    out: list[str] = []
+    i, n = 0, len(text)
+    while i < n:
+        c = text[i]
+        if c == '"':
+            # 整段字串原樣保留（含可能的 // 與 /*）
+            out.append(c)
+            i += 1
+            while i < n and text[i] != '"':
+                if text[i] == "\\" and i + 1 < n:
+                    out.append(text[i])
+                    i += 1
+                out.append(text[i])
+                i += 1
+            if i < n:
+                out.append(text[i])  # closing "
+                i += 1
+            continue
+        if c == "/" and i + 1 < n and text[i + 1] == "*":
+            i += 2
+            while i + 1 < n and not (text[i] == "*" and text[i + 1] == "/"):
+                i += 1
+            i += 2
+            continue
+        if c == "/" and i + 1 < n and text[i + 1] == "/":
+            while i < n and text[i] != "\n":
+                i += 1
+            continue
+        out.append(c)
+        i += 1
+    return "".join(out)
+
+
+def plugin_name(spec: str) -> str:
+    """從 'foo@latest' / '@scope/foo@1.2.3' 抽出名稱（不含版本）。
+
+    Scoped package 開頭的 `@` 要保留，版本前那個 `@` 才切。
+    """
+    if spec.startswith("@"):
+        return "@" + spec[1:].split("@", 1)[0]
+    return spec.split("@", 1)[0]
+
+
+def is_local_path(spec: str) -> bool:
+    """本地路徑 plugin（不走 npm 快取）一律跳過。
+
+    形式：./path、/abs/path、file:、file://
+    """
+    return (
+        spec.startswith("./")
+        or spec.startswith("/")
+        or spec.startswith("file:")
+    )
+
+
+def is_version_dir(name: str) -> bool:
+    """判斷 `oh-my-openagent@4.0.0` 這種具體版號目錄（不是 `@latest`）。
+
+      - scoped 外層（首字節 @）不在這裡處理（呼叫端自己分流）
+      - 必須含 `@`、版本段只含合法字元
+    """
+    if name.startswith("@"):
+        return False
+    if "@" not in name:
+        return False
+    version = name.rsplit("@", 1)[1]
+    if not version:
+        return False
+    return bool(_VERSION_CHAR_RE.match(version))
+
+
+def parse_version(output: str, pkg: str) -> str | None:
+    """從 bun add 輸出抓 `installed <pkg>@<version>` 的版本號。"""
+    pat = re.compile(rf"installed {re.escape(pkg)}@(?P<ver>[0-9][0-9._+\-]*)")
+    m = pat.search(output)
+    return m.group("ver") if m else None
+
+
+# ── 設定解析 ────────────────────────────────────────────────────────────
+
+
+class EnabledPlugin(NamedTuple):
+    spec: str  # 完整 spec，如 "opencode-zellij@latest"
+    name: str  # 純名稱，如 "opencode-zellij"
+
+
+def parse_enabled_plugins(config_path: Path) -> list[EnabledPlugin]:
+    """讀 opencode.jsonc，回傳啟用中（且非本地路徑）的 plugin 清單。
+
+    註解行先被 `strip_jsonc_comments` 移除，後續 `json.loads` 不會看到。
+    本地路徑（./、/、file:）一律跳過——它們不走 npm 快取。
+    """
+    try:
+        text = config_path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        typer.secho(f"設定檔不存在: {config_path}", fg="red", err=True)
+        raise typer.Exit(code=1)
+
+    cleaned = strip_jsonc_comments(text)
+    # JSONC 允許 trailing comma（`,]` / `,}`），標準 json 不允許 — 統一剝除。
+    # 注意要避開字串內的逗號：先處理過 strip_jsonc_comments 已知字串已原樣保留，
+    # 這裡的字元級 regex 仍可能在字串內誤傷；保守起見改用 json5 / 還是先相信 strip。
+    # 實測 opencode.jsonc 的字串內容不含「, 後接 } 或 ]」的形式，可安全套用。
+    cleaned = re.sub(r",(\s*[\]\}])", r"\1", cleaned)
+    try:
+        cfg = json.loads(cleaned)
+    except json.JSONDecodeError as e:
+        typer.secho(f"設定檔 JSON 解析失敗: {e}", fg="red", err=True)
+        raise typer.Exit(code=1)
+
+    raw = cfg.get("plugin") or []
+    if not isinstance(raw, list):
+        return []
+
+    enabled: list[EnabledPlugin] = []
+    for item in raw:
+        if not isinstance(item, str):
+            continue
+        if is_local_path(item):
+            continue
+        enabled.append(EnabledPlugin(spec=item, name=plugin_name(item)))
+    return enabled
+
+
+# ── 快取掃描 ────────────────────────────────────────────────────────────
+
+
+class CacheSnapshot(NamedTuple):
+    """快取掃描結果。"""
+
+    cached_latest: dict[str, Path]  # name（含 @scope/name） → path
+    cached_versioned: list[Path]  # 具體版號目錄（要 --clean-old 才刪）
+
+
+def scan_cache(packages_dir: Path) -> CacheSnapshot:
+    """掃描 `~/.cache/opencode/packages/`，收集 plugin 快取狀態。
+
+    - 普通 `<name>@latest`         → cached_latest[name]
+    - scoped `@scope/<name>@latest` → cached_latest["@scope/name"]
+    - 具體版號目錄（`@latest` 之外的 `@<ver>`）→ cached_versioned
+    """
+    cached_latest: dict[str, Path] = {}
+    cached_versioned: list[Path] = []
+
+    if not packages_dir.is_dir():
+        return CacheSnapshot(cached_latest, cached_versioned)
+
+    for entry in packages_dir.iterdir():
+        if not entry.is_dir():
+            continue
+        name = entry.name
+
+        # scoped：底下才是 plugin 目錄
+        if name.startswith("@"):
+            for sub in entry.iterdir():
+                if not sub.is_dir():
+                    continue
+                subname = sub.name
+                if subname.endswith("@latest"):
+                    cached_latest[f"{name}/{subname[:-len('@latest')]}"] = sub
+                elif is_version_dir(subname):
+                    cached_versioned.append(sub)
+            continue
+
+        # 普通：直接是 plugin 目錄
+        if name.endswith("@latest"):
+            cached_latest[name[: -len("@latest")]] = entry
+        elif is_version_dir(name):
+            cached_versioned.append(entry)
+
+    return CacheSnapshot(cached_latest, cached_versioned)
+
+
+# ── 動作分類 ────────────────────────────────────────────────────────────
+
+
+class Plan(NamedTuple):
+    to_install: list[EnabledPlugin]  # 啟用但快取沒有
+    to_update: list[EnabledPlugin]  # 啟用且快取有
+    to_prune: list[tuple[str, Path]]  # (name, path)：快取有但未啟用
+    versioned: list[Path]  # 舊版號目錄（要 --clean-old 才動）
+
+
+def build_plan(enabled: list[EnabledPlugin], cache: CacheSnapshot) -> Plan:
+    """把啟用清單與快取狀態對齊，分類出四組動作。"""
+    enabled_names = {ep.name for ep in enabled}
+    enabled_by_name = {ep.name: ep for ep in enabled}
+
+    to_install: list[EnabledPlugin] = []
+    to_update: list[EnabledPlugin] = []
+    to_prune: list[tuple[str, Path]] = []
+    for name, path in cache.cached_latest.items():
+        if name in enabled_names:
+            to_update.append(enabled_by_name[name])
+        else:
+            to_prune.append((name, path))
+    for ep in enabled:
+        if ep.name not in cache.cached_latest:
+            to_install.append(ep)
+
+    return Plan(to_install, to_update, to_prune, cache.cached_versioned)
+
+
+# ── 動作執行 ────────────────────────────────────────────────────────────
+
+
+def write_marker(pkg_dir: Path, pkg_name: str, version: str) -> None:
+    """寫 OpenCode plugin 用的 marker `package.json`（單一依賴對應到具體版本）。
+
+    `bun add` 解析出實際版本後，固化到 plugin 目錄的 `package.json`，
+    opencode 啟動時認這個 marker，而非用 `@latest` 浮動版本。
+    """
+    pkg_dir.mkdir(parents=True, exist_ok=True)
+    (pkg_dir / "package.json").write_text(
+        json.dumps(
+            {"dependencies": {pkg_name: version}},
+            indent=2,
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def clean_plugin_dir(pkg_dir: Path) -> None:
+    """清掉 plugin dir 內的 `node_modules` 與 `bun.lock`。
+
+    bun add 會在 cwd 產出這些，實際依賴會上提到 workspace，
+    plugin dir 只需保留 marker `package.json`。
+    """
+    for name in ("node_modules", "bun.lock"):
+        target = pkg_dir / name
+        if target.is_dir():
+            shutil.rmtree(target)
+        elif target.exists():
+            target.unlink()
+
+
+def install_plugin(pkg: EnabledPlugin) -> str | None:
+    """在 `<name>@latest` 目錄跑 `bun add <name>@latest`，回傳解析到的版本。
+
+    工作流：
+      1. mkdir <name>@latest
+      2. cd 進去、跑 bun add
+      3. 從輸出抓 `installed <name>@<version>`
+      4. 寫 marker `package.json`
+      5. 清 `node_modules` 與 `bun.lock`（實體依賴上提到共享 workspace）
+    """
+    pkg_dir = PACKAGES_DIR / f"{pkg.name}@latest"
+    pkg_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        result = subprocess.run(
+            ["bun", "add", f"{pkg.name}@latest"],
+            cwd=pkg_dir,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError:
+        return None  # bun 缺失，呼叫端判斷
+
+    output = (result.stdout or "") + (result.stderr or "")
+    version = parse_version(output, pkg.name)
+    if version is None:
+        return None
+
+    write_marker(pkg_dir, pkg.name, version)
+    clean_plugin_dir(pkg_dir)
+    return version
+
+
+def ensure_workspace_pkg() -> None:
+    """確保 workspace `package.json` 存在（首次執行時建立空殼）。
+
+    `bun add` 需要 workspace root 有 `package.json` 才能把依賴裝到共享的 `node_modules`，
+    不然會在 plugin 目錄內建立獨立的依賴樹。
+    """
+    pkg_json = PACKAGES_DIR / "package.json"
+    if not pkg_json.exists():
+        pkg_json.write_text(
+            json.dumps({"dependencies": {}}, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+
+# ── 報告 / 輸出 ─────────────────────────────────────────────────────────
+
+
+def print_plan(plan: Plan, has_lockfile: bool, *, prune: bool, clean_old: bool) -> None:
+    """印出預覽清單（共用於 dry-run 與實際執行前的摘要）。
+
+    `prune`/`clean_old` flag 控制是否要列出對應的清除計畫：
+    沒帶 --prune 就只 hint、不列細節。
+    """
+    if plan.to_update:
+        typer.echo()
+        typer.echo(f"將更新 {len(plan.to_update)} 個 plugin:")
+        for ep in plan.to_update:
+            typer.echo(f"  {ep.spec}")
+    if plan.to_install:
+        typer.echo()
+        typer.echo(f"將新裝 {len(plan.to_install)} 個 plugin:")
+        for ep in plan.to_install:
+            typer.echo(f"  {ep.spec}")
+    if not plan.to_update and not plan.to_install:
+        typer.echo()
+        typer.secho("沒有需要更新的 plugin", fg="yellow")
+
+    if prune and plan.to_prune:
+        typer.echo()
+        typer.echo(f"將清除 {len(plan.to_prune)} 個被註解的 plugin:")
+        for name, _ in plan.to_prune:
+            typer.echo(f"  {name}")
+    elif plan.to_prune:
+        typer.echo()
+        typer.echo(
+            f"提示: {len(plan.to_prune)} 個被註解的 plugin 仍在快取，加 --prune 才會清掉"
+        )
+    if clean_old and plan.versioned:
+        typer.echo()
+        typer.echo(f"將清除 {len(plan.versioned)} 個舊版號快取:")
+        for p in plan.versioned:
+            typer.echo(f"  {p.name}")
+    if has_lockfile:
+        typer.echo()
+        typer.echo(f"將刪除 lockfile: {LOCKFILE.name}")
+
+
+# ── CLI 入口 ────────────────────────────────────────────────────────────
+
+
+def main(
+    dry_run: Annotated[
+        bool,
+        typer.Option("-n", "--dry-run", help="預覽模式，只顯示將執行的操作"),
+    ] = False,
+    prune: Annotated[
+        bool,
+        typer.Option(
+            "-p",
+            "--prune",
+            help="清除被註解 plugin 的快取（預設保留，加 -p 才刪）",
+        ),
+    ] = False,
+    clean_old: Annotated[
+        bool,
+        typer.Option(
+            "-c",
+            "--clean-old",
+            help="順便清除舊版號快取目錄（oh-my-openagent@4.0.0 之類）",
+        ),
+    ] = False,
+    no_install: Annotated[
+        bool,
+        typer.Option(
+            "-N",
+            "--no-install",
+            help="僅清除快取目錄，不重裝（下次啟動 opencode 時自動安裝）",
+        ),
+    ] = False,
+    config: Annotated[
+        Path,
+        typer.Option(
+            "-C",
+            "--config",
+            help="opencode 設定檔路徑（預設 ~/.config/opencode/opencode.jsonc）",
+        ),
+    ] = DEFAULT_CONFIG,
+) -> None:
+    """以 opencode.jsonc 為 single source of truth 更新 plugin 快取。"""
+    enabled = parse_enabled_plugins(config)
+    cache = scan_cache(PACKAGES_DIR)
+    plan = build_plan(enabled, cache)
+    has_lockfile = LOCKFILE.is_file()
+
+    # ── 啟用 plugin 摘要（永遠印） ──
+    typer.secho(
+        f"從 {config} 解析到 {len(enabled)} 個啟用的 plugin:",
+        fg="cyan",
+    )
+    if enabled:
+        for ep in enabled:
+            typer.secho(f"  ✓ {ep.spec}", fg="green")
+    else:
+        typer.secho("  (無)", fg="yellow")
+
+    # ── 乾跑：印計畫就離開 ──
+    if dry_run:
+        typer.secho("\n=== 預覽模式 ===", fg="yellow", bold=True)
+        print_plan(plan, has_lockfile, prune=prune, clean_old=clean_old)
+        return
+
+    # ── 預設提示：若沒帶 --prune 而有可清的快取（print_plan 內已處理） ──
+
+    # ── 純清除動作（--prune / --clean-old，與 --no-install 互不影響） ──
+    if prune and plan.to_prune:
+        typer.echo()
+        for name, path in plan.to_prune:
+            shutil.rmtree(path)
+            typer.echo(f"  清除 {name}")
+    if clean_old and plan.versioned:
+        typer.echo()
+        for p in plan.versioned:
+            shutil.rmtree(p)
+            typer.echo(f"  清除 {p.name}")
+
+    # ── 對啟用 plugin 的動作（清快取 / 重新安裝） ──
+    targets = plan.to_install + plan.to_update
+
+    if no_install:
+        # 僅清除 @latest 快取，不重裝
+        for ep in targets:
+            pkg_dir = PACKAGES_DIR / f"{ep.name}@latest"
+            if pkg_dir.exists():
+                shutil.rmtree(pkg_dir)
+                typer.echo(f"  清除 {ep.name}@latest（--no-install）")
+        typer.echo()
+        typer.secho(
+            "✓ 快取已清除（略過安裝，下次啟動 opencode 時將自動安裝）",
+            fg="green",
+        )
+        return
+
+    if not targets:
+        typer.echo()
+        typer.secho("✓ 已是最新的狀態", fg="green")
+        return
+
+    # ── 真的要重裝：先刪 lockfile（強制重新解析版本） ──
+    if has_lockfile:
+        typer.echo()
+        LOCKFILE.unlink()
+        typer.echo(f"已刪除 {LOCKFILE.name}")
+
+    if not shutil.which("bun"):
+        typer.secho(
+            "❌ 找不到 bun。快取已清除，需要手動執行 bun install。",
+            fg="red",
+            err=True,
+        )
+        typer.echo("   可使用 mise 安裝: mise install bun", err=True)
+        raise typer.Exit(code=1)
+
+    ensure_workspace_pkg()
+
+    typer.echo()
+    typer.echo(f"重新安裝 {len(targets)} 個 plugin ...")
+    typer.echo()
+
+    results: dict[str, str] = {}
+    failed: list[str] = []
+    for ep in targets:
+        typer.echo(f"  {ep.name}@latest ... ", nl=False)
+        version = install_plugin(ep)
+        if version is not None:
+            results[ep.name] = version
+            typer.secho(f"✓ {version}", fg="green")
+        else:
+            failed.append(ep.name)
+            typer.secho("❌ 安裝失敗", fg="red")
+
+    if results:
+        typer.echo()
+        width = max(len(n) for n in results)
+        typer.echo(f"{'Plugin'.ljust(width)}  版本")
+        typer.echo(f"{'-' * width}  {'-' * 6}")
+        for name in sorted(results):
+            typer.echo(f"{name.ljust(width)}  {results[name]}")
+
+    if failed:
+        typer.echo()
+        for name in failed:
+            typer.secho(f"  {name}  ❌ 安裝失敗，請手動檢查", fg="red")
+        typer.echo()
+        typer.secho(
+            f"⚠ {len(failed)}/{len(targets)} plugin 更新失敗",
+            fg="yellow",
+        )
+    else:
+        typer.echo()
+        typer.secho(
+            f"✓ OpenCode plugin 已更新（啟用 {len(enabled)} 個）",
+            fg="green",
+        )
+
+
+if __name__ == "__main__":
+    # no_args_is_help=False：無參數時直接執行實際更新（與 plan.md 預期一致）
+    cli = typer.Typer(add_completion=False, no_args_is_help=False)
+    cli.command()(main)
+    cli()
