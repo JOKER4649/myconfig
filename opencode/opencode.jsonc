@@ -1,9 +1,13 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "plugin": [
-    "opencode-zellij@latest",
-    "@slkiser/opencode-quota@latest",
-    // "oh-my-openagent@latest"
+    [
+      "opencode-zellij@latest",
+      {
+        "test": 1
+      }
+    ],
+    "@slkiser/opencode-quota@latest"
   ],
   "autoupdate": true,
   "default_agent": "copilot",
@@ -11,40 +15,34 @@
   "small_model": "opencode-go/deepseek-v4-flash",
   "permission": {
     "bash": {
-      "pkill -f *": "deny",
+      "pkill -f *": "deny"
     },
     "task": {
       "*": "deny",
       "oracle": "allow",
-      "explore": "allow",
+      "explore": "allow"
     },
-    // 工作目錄外的檔案存取：「家目錄全允許 + 敏感例外」策略
-    // 順序敏感：opencode 採「最後 match 勝出」，deny/ask 例外必須放在 allow 之後
     "external_directory": {
-      // 家目錄與系統 temp：myconfig 管理 dotfile 的主場
       "~/**": "allow",
       "/tmp/**": "allow",
-      // 高敏感金鑰類 → deny（外洩無法 revoke 重發）
       "~/.ssh/id_*": "deny",
       "~/.ssh/*.pem": "deny",
-      // Token / credential 類 → ask（除錯時可手動放行，外洩可 revoke）
       "~/.config/gh/hosts.yml": "ask",
       "~/.config/gcloud/credentials*": "ask",
       "~/.config/gcloud/legacy_credentials/**": "ask",
-      "~/.netrc": "ask",
-      "~/.docker/config.json": "ask",
-    },
+      "~/.docker/config.json": "ask"
+    }
   },
   "agent": {
     "general": {
-      "disable": true,
+      "disable": true
     },
     "plan": {
-      "disable": true,
+      "disable": true
     },
     "build": {
-      "disable": true,
-    },
+      "disable": true
+    }
   },
   "lsp": false,
   "mcp": {
@@ -63,7 +61,7 @@
       "showSessionTokens": true,
       "enabledProviders": "auto",
       "formatStyle": "grouped",
-      "percentDisplayMode": "used",
-    },
-  },
+      "percentDisplayMode": "used"
+    }
+  }
 }
