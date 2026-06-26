@@ -7,3 +7,6 @@
 
 # herdr 安裝的整合檔（自動生成，不應手動追蹤）
 opencode/plugins/herdr-*.js
+
+# 手動歸檔的非 git 檔案（mv 進來待清理）
+.delete/
