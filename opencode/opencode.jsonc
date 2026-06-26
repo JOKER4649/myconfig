@@ -6,8 +6,8 @@
     // "oh-my-openagent@latest"
   ],
   "autoupdate": true,
-  "default_agent": "quick",
-  "model": "opencode-go/deepseek-v4-pro",
+  "default_agent": "copilot",
+  "model": "minimax/MiniMax-M3",
   "small_model": "opencode-go/deepseek-v4-flash",
   "permission": {
     "bash": {
