@@ -7,7 +7,8 @@
 | 目錄 | 說明 |
 |------|------|
 | `commands/`  | 自訂 CLI 命令（Python + typer，透過 mise PATH 注入） |
-| `opencode/` | [OpenCode](https://opencode.ai) AI 編碼助手設定 |
+| `opencode/` | [OpenCode](https://opencode.ai) AI 編碼助手設定（共用 base，`~/.config/opencode` symlink） |
+| `opencode-local/` | OpenCode 個人 overlay（`agents/` 等），僅互動式使用時透過 `OPENCODE_CONFIG_DIR` 疊加；非 symlink，避免污染 multica 等直接叫用 opencode 的工具 |
 | `zsh/` | Zsh shell 設定（基於 [Oh My Zsh](https://ohmyz.sh)） |
 | `mise/` | [mise](https://mise.jdx.dev) 開發工具版本管理器設定 |
 | `starship/` | [Starship](https://starship.rs) 跨 shell 提示字元設定 |
