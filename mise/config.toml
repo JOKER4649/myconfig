@@ -9,9 +9,7 @@ pnpm = 'latest'
 python = "3.14"
 uv = "latest"
 zellij = "latest"
-"npm:pm2" = "latest"
 lazygit = "latest"
-yazi = "latest"
 "npm:agent-browser" = "latest"
 "npm:@vue/language-server" = "latest"
 "npm:typescript-language-server" = "latest"
@@ -21,13 +19,13 @@ glab = { version = "latest", exe = "glab" }
 bat = "latest"
 "pipx:numpy" = "latest"
 act = "latest"
-cursor-agent = "latest"
 worktrunk = "latest"
 rg = "latest"
 lazydocker = "latest"
 wrangler = { version = "latest", allow_builds = ["esbuild", "sharp", "workerd"] }
 cloud-sql-proxy = "2.22.1"
 "npm:@openchamber/web" = "latest"
+yazi = "latest"
 
 [settings]
 npm.package_manager = "bun"
