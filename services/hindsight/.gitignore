@@ -1,0 +1,3 @@
+# runtime state — re-initialized on `docker compose up`
+tei_data/   # TEI model cache (HF Hub format, bge-m3 weights ~2.2 GB)
+pg_data/    # postgres data dir (pgvector tables + schema)
