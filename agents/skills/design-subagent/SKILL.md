@@ -92,12 +92,15 @@ subagent 的工具集決定它能獲得什麼資訊。設計時:
 
 opencode agent frontmatter 合法欄位為:`name, model, variant, description, mode, hidden, color, steps, options, permission, disable, temperature, top_p`。
 
-非官方欄位(如 `note:`)會被 silently 放進 `options` — 無功能影響(opencode 不會 hard-fail),但語意上變成「agent 配置」而非「文件元資料」。
+非官方欄位(如 `note:`、`last-updated`)會被 silently 放進 `options` — 無功能影響(opencode 不會 hard-fail),但語意上變成「agent 配置」而非「文件元資料」。
 
 **建議**:
 - 給人看的設計記錄用 `note:` 欄位(可接受 silently 進 options)
-- **不要把任何 subagent 行為依賴放進 `note:`**(LLM 不會讀到 frontmatter,行為約束要放 prompt 本體)
-- 純時間戳不要獨立成欄位(資訊跟 git log 重複),時間資訊併入 `note:` 開頭一行(如 `最後更新:YYYY-MM-DD @ commit <hash>`)
+- **不要把任何 subagent 行為依賴放進 `note:` 或其他 frontmatter 元資料欄位**(LLM 不會讀到 frontmatter,行為約束要放 prompt 本體)
+- 純時間戳(如 `last-updated: YYYY-MM-DD`)獨立成欄位 **OR** 併入 `note:` 開頭一行 — 兩者皆可,根據用戶偏好決定:
+  - **獨立欄位**(`last-updated`):明確、易讀、編輯器結構化顯示
+  - **併入 `note:`**(`最後更新:YYYY-MM-DD @ commit <hash>`):資訊跟設計記錄放一起,但較不顯眼
+  - 純日期獨立欄位即可;若要含 commit hash / 變更摘要,通常更適合放在 `note:`(因為 `last-updated` 一般只用純日期)
 
 ## 建議章節結構
 
@@ -111,9 +114,16 @@ model: ...
 variant: ...
 permission:
   [工具權限設定]
-note: |
-  最後更新:YYYY-MM-DD @ commit <hash>(<變更摘要>)
-  [設計記錄:為什麼這樣設計 + 替代方案 + 假設狀態 + 未來注意]
+
+# 時間戳兩種放置方式(擇一)
+last-updated: YYYY-MM-DD                       # 方案 A:獨立欄位(純日期)
+# note: |
+#   [設計記錄:...]                              # 方案 A 的 note
+
+# 或
+# note: |
+#   最後更新:YYYY-MM-DD @ commit <hash>(摘要)   # 方案 B:時間戳併入 note
+#   [設計記錄:...]
 ---
 
 ## 職責
@@ -127,7 +137,7 @@ note: |
 ## 職責護欄
 ```
 
-章節順序可依 subagent 性質調整,不必每個都有。
+章節順序可依 subagent 性質調整,不必每個都有。`last-updated` 跟 `note:` 的時間戳擇一即可,不必兩者都有。
 
 ## 工作流程
 
