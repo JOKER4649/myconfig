@@ -26,20 +26,24 @@ description: 建立 `review ready` 的健壯 github PR
 
 ## AI PR review
 
-組織內使用 `gemini-code-assist` (免費版)
+組織內使用兩個 bot 並行 review, 互相補充盲點:
 
-- 當 **專案位於 gitlab**, 忽略 `gemini-code-assist` 相關流程 (gitlab 不支持)
-- `gemini-code-assist` 第一次 review 需要數分鐘, 建立 PR 後使用本 SKILL 的 `wait.py` 輪詢等待 (見下方「工具」), **不要**用 `sleep` 猜等待時間
+- `gemini-code-assist` (免費版)
+- `kilo-code-bot` (額度更充足)
+
+- 當 **專案位於 gitlab**, 忽略這兩個 bot 相關流程 (gitlab 不支持)
+- 兩者**並行**運作, 不要把它們視為互斥或循序; 預設 `wait.py` 會等兩個都出現 review 後才退出, 確保不會漏接任何一方的評論
+- 兩個 bot 第一次 review 都需要數分鐘, 建立 PR 後使用本 SKILL 的 `wait.py` 輪詢等待 (見下方「工具」), **不要**用 `sleep` 猜等待時間
 - **不應**盲信 `AI PR review` 評論, 由於缺少任務的完整上下文, 應拒絕不合實際情況的評論
 - 修復明確的 bug 與設計問題, 簡單的改良建議直接採用, 複雜的改良建議建立 issue 來追蹤, 如果需要決策向用戶確認
 
 ## 工具
 
 - 使用 `act` 模擬 `github actions`, 減少 github actions 的負擔
-- 使用 `~/myconfig/opencode/skills/create-strong-pr/wait.py` 輪詢等待 CI 完成與 gemini review 出現
+- 使用本 SKILL 目錄內的 `wait.py` 輪詢等待 CI 完成, 以及 `gemini-code-assist` 與 `kilo-code-bot` review 都出現
   - 預設每 30 秒輪詢一次, 15 分鐘 timeout; 依賴 `gh`, 僅支援 GitHub
-  - GitHub repo 未裝 gemini 時加 `--no-gemini`
-  - 退出碼: `0`=CI 通過+review 已到, `1`=CI 有失敗, `2`=超時, `3`=gh 錯誤
+  - 預設同時等兩個 bot: GitHub repo 未裝 gemini 時加 `--no-gemini`, 未裝 kilo 時加 `--no-kilo`
+  - 退出碼: `0`=CI 全部通過+所有啟用的 bot review 已到, `1`=CI 有失敗 (等待條件皆已滿足), `2`=超時, `3`=gh 錯誤
 - 使用 `pr-review-thread_list` 列出 PR 的所有 review threads (含 thread ID 與狀態)
 - 使用 `pr-review-thread_resolve` 解決 review thread (需提供 thread ID)
 - 使用 `pr-review-thread_unresolve` 反向操作

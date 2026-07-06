@@ -3,7 +3,11 @@
 # requires-python = ">=3.11"
 # dependencies = ["typer"]
 # ///
-"""輪詢等待 PR 的 CI 完成, 並等待 gemini-code-assist 首次 review 出現。"""
+"""輪詢等待 PR 的 CI 完成, 並等待 AI review bots 首次 review 出現。
+
+預設同時等待 gemini-code-assist 與 kilo-code-bot, 兩個 bot 並行 review
+以互相補充盲點。
+"""
 
 import json
 import subprocess
@@ -14,6 +18,7 @@ from typing import Annotated
 import typer
 
 GEMINI_LOGIN_PREFIX = "gemini-code-assist"
+KILO_LOGIN_PREFIX = "kilo-code"
 
 # 視為 "失敗" 的 CheckRun conclusion; 其餘 (NEUTRAL/SKIPPED/STALE) 視為通過。
 FAILURE_CONCLUSIONS = {
@@ -65,11 +70,11 @@ def _summarise_checks(rollup: list[dict]) -> tuple[str, bool, bool]:
     return summary, done == total, done == total and fail == 0
 
 
-def _gemini_present(reviews: list[dict], comments: list[dict]) -> bool:
-    """偵測 gemini-code-assist 是否已在 reviews 或 comments 中留言。"""
+def _bot_present(prefix: str, reviews: list[dict], comments: list[dict]) -> bool:
+    """偵測指定 login 前綴的 bot 是否已在 reviews 或 comments 中留言。"""
     for item in (reviews or []) + (comments or []):
         login = ((item.get("author") or {}).get("login") or "").lower()
-        if login.startswith(GEMINI_LOGIN_PREFIX):
+        if login.startswith(prefix):
             return True
     return False
 
@@ -91,17 +96,25 @@ def main(
         bool,
         typer.Option(
             "--gemini/--no-gemini",
-            help="是否等待 gemini review (GitHub repo 未裝 gemini 時用 --no-gemini)",
+            help="是否等待 gemini-code-assist review (GitHub repo 未裝時用 --no-gemini)",
+        ),
+    ] = True,
+    kilo: Annotated[
+        bool,
+        typer.Option(
+            "--kilo/--no-kilo",
+            help="是否等待 kilo-code-bot review (GitHub repo 未裝時用 --no-kilo)",
         ),
     ] = True,
 ) -> None:
-    """輪詢等待 PR 的 CI 完成且 gemini-code-assist review 出現。
+    """輪詢等待 PR 的 CI 完成, 且所有啟用的 AI review bot 都出現首次 review。
 
     每 --interval 秒透過 gh pr view --json 查詢一次 GitHub。
+    預設同時等待 gemini-code-assist 與 kilo-code-bot。
 
     退出碼:
-      0  CI 全部通過且 gemini review 已出現
-      1  CI 有失敗 (兩個等待條件皆已滿足)
+      0  CI 全部通過且所有啟用的 bot review 已出現
+      1  CI 有失敗 (等待條件皆已滿足)
       2  超時
       3  gh CLI 錯誤 (例如當前分支沒有 PR, 或 gh 未安裝)
     """
@@ -135,15 +148,23 @@ def main(
             ci_summary = "registering…"
         first_iteration = False
 
-        gemini_ready = not gemini or _gemini_present(reviews, comments)
+        gemini_ready = not gemini or _bot_present(
+            GEMINI_LOGIN_PREFIX, reviews, comments
+        )
+        kilo_ready = not kilo or _bot_present(
+            KILO_LOGIN_PREFIX, reviews, comments
+        )
+        bots_ready = gemini_ready and kilo_ready
 
         ts = datetime.now().strftime("%H:%M:%S")
         line = f"[{ts}] CI: {ci_summary}"
         if gemini:
             line += f" | gemini: {'ready' if gemini_ready else 'waiting'}"
+        if kilo:
+            line += f" | kilo: {'ready' if kilo_ready else 'waiting'}"
         typer.echo(line)
 
-        if ci_done and gemini_ready:
+        if ci_done and bots_ready:
             break
 
         if time.time() >= deadline:
@@ -158,6 +179,8 @@ def main(
         typer.secho("✗ CI 有失敗項目", fg="red")
     if gemini:
         typer.secho("✓ Gemini review 已出現", fg="green")
+    if kilo:
+        typer.secho("✓ Kilo review 已出現", fg="green")
 
     raise typer.Exit(0 if ci_all_success else 1)
 
