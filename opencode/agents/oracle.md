@@ -1,8 +1,8 @@
 ---
 description: 高階推理、解讀問題、提供建議
 mode: subagent
-model: openai/gpt-5.5
-variant: high
+model: opencode-go/glm-5.2
+variant: max
 permission:
   edit: deny
   write: deny
