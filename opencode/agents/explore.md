@@ -12,8 +12,9 @@ description: |
 mode: subagent
 model: minimax-coding-plan/MiniMax-M3
 variant: high
+last-updated: 2026-07-07
 note: |
-  最後更新:2026-07-07 @ commit f3790de(方案 D 套用)。設計記錄 — 為什麼這樣設計 / 重要決策 / 未來想改的人要注意什麼
+  設計記錄 — 為什麼這樣設計 / 重要決策 / 未來想改的人要注意什麼
 
   核心設計理念:
   - 事實蒐集型:不推理、不給建議、不下結論。輸出是「原料」供呼叫者後續處理。
