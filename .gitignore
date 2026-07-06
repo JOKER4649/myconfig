@@ -13,8 +13,4 @@ opencode/plugins/herdr-*.js
 
 .env
 
-# Hindsight stack runtime state — re-fetched on `docker compose up`
-# 加 leading `/` 鎖定 repo root；trailing `/` 只 match 目錄
-# service-local .gitignore 也放在 services/hindsight/.gitignore (備援)
-/services/hindsight/tei_data/
-/services/hindsight/pg_data/
+tmp/
