@@ -23,6 +23,7 @@
 | `fcitx5/` | [Fcitx5](https://fcitx-im.org) 輸入法 XDG autostart 設定 |
 | `worktrunk/` | [Worktrunk](https://worktrunk.dev) git worktree 管理工具設定 |
 | `agents/` | [OpenCode Skills](https://opencode.ai/docs/skills) ── 使用者安裝的 agent skills |
+| `curl/` | [curl](https://curl.se) 全局設定（預設啟用 `.netrc` 認證） |
 
 
 ## mise 自訂插件

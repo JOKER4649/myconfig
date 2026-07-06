@@ -56,6 +56,7 @@ LINKS: list[LinkEntry] = [
     ),
     LinkEntry("worktrunk/config.toml", "~/.config/worktrunk/config.toml"),
     LinkEntry("agents", "~/.agents"),
+    LinkEntry("curl/.curlrc", "~/.curlrc"),
 ]
 
 # ============================================================
