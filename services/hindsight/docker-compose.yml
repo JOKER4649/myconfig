@@ -107,8 +107,13 @@ services:
       # 多語言涵蓋比 Cohere rerank-multilingual-v3 弱，但對中英混雜內容
       # 已足夠；用 ~200MB RAM 換掉一個新 vendor dependency。
       HINDSIGHT_API_RERANKER_PROVIDER: flashrank
+
+      # Control Plane (http://127.0.0.1:9999) 的 access key。
+      # image 沒 baked 這個 var,沒顯式 map 就不會進 container,UI 會完全 open。
+      HINDSIGHT_CP_ACCESS_KEY: ${HINDSIGHT_CP_ACCESS_KEY:?HINDSIGHT_CP_ACCESS_KEY must be set in .env}
     ports:
       - "127.0.0.1:8888:8888"
+      - "127.0.0.1:9999:9999"
     healthcheck:
       # 127.0.0.1 而非 localhost：pgvector/pgvector:pg18 image 的 /etc/hosts
       # 把 `localhost` 排在 IPv6 `::1` 前面，但 healthcheck 走 IPv4 直連，
