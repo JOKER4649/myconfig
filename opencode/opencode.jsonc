@@ -26,7 +26,7 @@
   },
   "agent": {
     "plan": { "disable": true },
-    "build": { "disable": true },
+    "build": { "disable": false },
     "general": { "disable": true },
   },
   "lsp": false,
