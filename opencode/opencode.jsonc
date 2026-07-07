@@ -23,10 +23,24 @@
       "~/.config/gcloud/legacy_credentials/**": "ask",
       "~/.docker/config.json": "ask",
     },
+    // 全域禁掉所有 MCP tools:subagent 沒 override → 看不到,避免 explore/oracle
+    // 帶 31 個 memory_retain/recall/reflect 等 tools 污染 context。
+    // 只有 primary (build) 在下面 agent block 顯式 allow 拿回來。
+    "memory_*": "deny",
+    "context7_*": "deny",
+    "grep_app_*": "deny",
   },
   "agent": {
     "plan": { "disable": true },
-    "build": { "disable": false },
+    "build": {
+      "disable": false,
+      // Primary agent override:MCP tools 拿回來。subagent 繼承上面的 deny。
+      "permission": {
+        "memory_*": "allow",
+        "context7_*": "allow",
+        "grep_app_*": "allow",
+      },
+    },
     "general": { "disable": true },
   },
   "lsp": false,
