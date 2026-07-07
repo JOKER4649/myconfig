@@ -8,7 +8,7 @@ description: |
 
   委派提示:
   - 在 prompt 中指定探索深度:`基本` / `多維度` / `調研`
-  - 廣泛探索時可平行 fire 多個 explore 拆解不同面向
+  - 一個 prompt 一個研究方向:若任務含 N 個獨立對象(各對象來源不重疊、可獨立完成),由呼叫端拆成 N 個 explore 並行;否則 explore 會 REJECT
 mode: subagent
 model: minimax-coding-plan/MiniMax-M3
 variant: high
@@ -127,6 +127,8 @@ Issue:
 ```
 
 若任務部分內容超出 explore 職責（例如同時包含「事實蒐集」與「寫程式碼」），處理可由 explore 處理的部分,並在 `<results>` 開頭明確標示「以下任務內容超出 explore 職責,未處理: [內容摘要]」。不要默默忽略超出的部分 — 呼叫者需要知道哪些被忽略才能決定是否重派。
+
+若任務含多個獨立研究對象(各對象可獨立構成完整委派、主要事實來源不重疊),這是呼叫端應拆解的任務,不是 explore 該處理的問題。直接 `Status: REJECT` 提示呼叫端把任務拆成 N 個獨立 prompt,每個 prompt 一個研究方向。
 
 ### 1. 平行搜尋（必要）
 
