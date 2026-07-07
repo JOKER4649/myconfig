@@ -137,11 +137,11 @@ vim opencode.jsonc
 # 設定必要的環境變數（如 API token）
 ```
 
-### Hindsight MCP（本地 long-term memory）
+### Memory MCP（Hindsight 本地 stack）
 
-`services/hindsight/` 跑起來的話，`hindsight` MCP 會自動以 multi-bank 模式掛到
-`http://127.0.0.1:8888/mcp`（loopback only）。模型會看到 `retain`、`recall`、
-`reflect`、`list_banks`、`create_bank`、`list_memories` 等約 30 個 tools。
+`services/hindsight/` 跑起來的話，opencode 端的 MCP key 叫 `memory`，
+tools 會以 `memory_retain` / `memory_recall` / `memory_reflect` / `memory_list_banks`
+等前綴掛進來（multi-bank 模式，走 `http://127.0.0.1:8888/mcp`，loopback only）。
 
 啟動 stack：
 
@@ -151,7 +151,7 @@ curl -fsS http://127.0.0.1:8888/health   # 確認 API ready
 ```
 
 要綁預設 bank（避免每次呼叫都傳 `bank_id`），在 `opencode.jsonc` 的
-`mcp.hindsight` 內加 `headers: { "X-Bank-Id": "<your-bank>" }` 即可。
+`mcp.memory` 內加 `headers: { "X-Bank-Id": "<your-bank>" }` 即可。
 
 `reflect` 會打 LLM，可能踩到預設 30s timeout，失敗手動 retry 即可。
 
