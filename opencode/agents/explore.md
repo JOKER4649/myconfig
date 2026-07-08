@@ -12,6 +12,9 @@ description: |
 mode: subagent
 model: minimax-coding-plan/MiniMax-M3
 variant: high
+permission:
+  edit: deny
+  write: deny
 last-updated: 2026-07-07
 note: |
   設計記錄 — 為什麼這樣設計 / 重要決策 / 未來想改的人要注意什麼

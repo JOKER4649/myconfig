@@ -23,10 +23,9 @@ description: |
   - @oracle:設計判斷 / 方案比較 / 風險評估(純建議不執行)
 
 mode: primary
-model: opencode-go/glm-5.2
 permission:
   task: allow # 主 agent 允許委派所有 subagent
-variant: max
+variant: high
 last-updated: 2026-07-07
 note: |
   設計記錄 — 為什麼這樣設計 / 重要決策 / 未來想改的人要注意什麼

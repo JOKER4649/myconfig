@@ -28,7 +28,7 @@
     // 僅 @query agent 可使用網路搜尋工具
     "websearch_*": "deny",
     "websearch-fallback_*": "deny",
-    "brave-search_*": "deny"
+    "brave-search_*": "deny",
   },
   "agent": {
     "plan": { "disable": true },
@@ -41,15 +41,15 @@
         // @explore 有完整網路搜尋能力
         "websearch_*": "allow",
         "websearch-fallback_*": "allow",
-        "brave-search_*": "allow"
-      }
+        "brave-search_*": "allow",
+      },
     },
     "quick": {
       "model": "opencode-go/deepseek-v4-pro",
       "variant": "high",
       "description": "與 `copilot` 相同的行為方式, 僅模型不同",
       "prompt": "file:./agents/copilot.md",
-    }
+    },
   },
   "lsp": false,
   "mcp": {
