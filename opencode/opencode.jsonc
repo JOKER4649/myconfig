@@ -8,9 +8,9 @@
     "bash": {
       "pkill -f *": "deny",
     },
+    // 所有 agent 都可以委派 explore 來查詢資料, 但其他 subagent 採用白名單
     "task": {
       "*": "deny",
-      "oracle": "allow",
       "explore": "allow",
     },
     "external_directory": {
@@ -23,25 +23,33 @@
       "~/.config/gcloud/legacy_credentials/**": "ask",
       "~/.docker/config.json": "ask",
     },
-    // 全域禁掉所有 MCP tools:subagent 沒 override → 看不到,避免 explore/oracle
-    // 帶 31 個 memory_retain/recall/reflect 等 tools 污染 context。
-    // 只有 primary (build) 在下面 agent block 顯式 allow 拿回來。
+    // 僅主模型可使用記憶工具
     "memory_*": "deny",
-    "context7_*": "deny",
-    "grep_app_*": "deny",
+    // 僅 @query agent 可使用網路搜尋工具
+    "websearch_*": "deny",
+    "websearch-fallback_*": "deny",
+    "brave-search_*": "deny"
   },
   "agent": {
     "plan": { "disable": true },
-    "build": {
-      "disable": false,
-      // Primary agent override:MCP tools 拿回來。subagent 繼承上面的 deny。
-      "permission": {
-        "memory_*": "allow",
-        "context7_*": "allow",
-        "grep_app_*": "allow",
-      },
-    },
+    "build": { "disable": false },
     "general": { "disable": true },
+    "explore": {
+      "permission": {
+        // 不允許遞迴委派 explore
+        "task": "deny",
+        // @explore 有完整網路搜尋能力
+        "websearch_*": "allow",
+        "websearch-fallback_*": "allow",
+        "brave-search_*": "allow"
+      }
+    },
+    "quick": {
+      "model": "opencode-go/deepseek-v4-pro",
+      "variant": "high",
+      "description": "與 `copilot` 相同的行為方式, 僅模型不同",
+      "prompt": "file:./agents/copilot.md",
+    }
   },
   "lsp": false,
   "mcp": {
