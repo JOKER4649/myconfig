@@ -8,10 +8,11 @@
     "bash": {
       "pkill -f *": "deny",
     },
-    // 所有 agent 都可以委派 explore 來查詢資料, 但其他 subagent 採用白名單
+    // 所有 agent 都可以委派 explore 來查詢資料, vision 來解釋圖片, 但其他 subagent 採用白名單
     "task": {
       "*": "deny",
       "explore": "allow",
+      "vision": "allow",
     },
     "external_directory": {
       "~/**": "allow",
