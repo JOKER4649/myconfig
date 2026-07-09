@@ -15,7 +15,6 @@ import { BlankTransport, LogLayer, type LogLayerMetadata } from "loglayer"
 // context window 计算 ratio，所以同一套阀值对 200K Claude / 1M Gemini /
 // 128K GPT-5 都适用。
 
-const DEFAULT_THRESHOLD = 0.8
 const DEFAULT_COOLDOWN_MS = 60_000
 const DEFAULT_MIN_TOKENS = 50_000
 const DEFAULT_LARGE_CONTEXT_BOUNDARY = 400_000
