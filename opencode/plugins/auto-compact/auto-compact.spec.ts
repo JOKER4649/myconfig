@@ -24,7 +24,7 @@ import {
   InProgressTracker,
   type PreemptiveCompactConfig,
   type ResolvedConfig,
-} from "./auto-compact"
+} from "./auto-compact.ts"
 
 // ============================================================
 // formatMetaValue
