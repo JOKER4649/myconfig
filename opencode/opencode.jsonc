@@ -14,16 +14,6 @@
       "explore": "allow",
       "vision": "allow",
     },
-    "external_directory": {
-      "~/**": "allow",
-      "/tmp/**": "allow",
-      "~/.ssh/id_*": "deny",
-      "~/.ssh/*.pem": "deny",
-      "~/.config/gh/hosts.yml": "ask",
-      "~/.config/gcloud/credentials*": "ask",
-      "~/.config/gcloud/legacy_credentials/**": "ask",
-      "~/.docker/config.json": "ask",
-    },
     // 僅主模型可使用記憶工具
     "memory_*": "deny",
     // 僅 @query agent 可使用網路搜尋工具
@@ -35,6 +25,9 @@
     "plan": { "disable": true },
     "build": { "disable": false },
     "general": { "disable": true },
+    "compaction": {
+      "model": "minimax-coding-plan/MiniMax-M3",
+    },
     "explore": {
       "permission": {
         // 不允許遞迴委派 explore
@@ -45,14 +38,8 @@
         "brave-search_*": "allow",
       },
     },
-    "quick": {
-      "model": "opencode-go/deepseek-v4-pro",
-      "variant": "high",
-      "description": "與 `copilot` 相同的行為方式, 僅模型不同",
-      "prompt": "file:./agents/copilot.md",
-    },
   },
-  "lsp": false,
+  "lsp": true,
   "mcp": {
     "context7": {
       "type": "remote",
