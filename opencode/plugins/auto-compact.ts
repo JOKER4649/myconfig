@@ -1,59 +1,311 @@
 // ============================================================
-// Auto Compact Plugin — 上下文達閾值時自動壓縮並繼續
-// 參考 oh-my-openagent preemptive-compaction 實作
+// Auto Compact Plugin — 上下文达阀值时自动压缩并继续
+// 参考 oh-my-openagent preemptive-compaction 实现
 // ============================================================
 import type { Plugin, PluginInput } from "@opencode-ai/plugin"
-import type { AssistantMessage, Provider, Model } from "@opencode-ai/sdk"
+import type { AssistantMessage, Provider } from "@opencode-ai/sdk"
 import { appendFileSync, mkdirSync } from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { BlankTransport, LogLayer, type LogLayerMetadata } from "loglayer"
 
-// Preemptive compaction plugin for opencode.
-//
-// Watches every completed assistant message, computes the current
-// (input + cache.read) / model.contextWindow ratio, and calls
-// session.summarize() once usage crosses a configured threshold.
-//
-// Unlike opencode's built-in `compaction.auto`, this triggers relative
-// to each model's actual context window, so the same threshold works
-// for 200K Claude, 1M Gemini, 128K GPT-5, etc.
+// 监听 message.updated 事件，当 (input + cache.read) / model.contextWindow
+// 跨过设定的阀值时，自动调用 session.summarize() 避免 context overflow。
+// 与 opencode 内建 compaction.auto 不同：本 plugin 相对每个模型自己的
+// context window 计算 ratio，所以同一套阀值对 200K Claude / 1M Gemini /
+// 128K GPT-5 都适用。
 
 const DEFAULT_THRESHOLD = 0.8
 const DEFAULT_COOLDOWN_MS = 60_000
 const DEFAULT_MIN_TOKENS = 50_000
+const DEFAULT_LARGE_CONTEXT_BOUNDARY = 400_000
+const DEFAULT_LARGE_CONTEXT_THRESHOLD = 0.6
+const DEFAULT_SMALL_CONTEXT_THRESHOLD = 0.8
 const PROVIDER_CACHE_REFRESH_MS = 5 * 60_000
+const THRESHOLD_MIN = 0.1
+const THRESHOLD_MAX = 0.95
 
-type PreemptiveCompactConfig = {
+export type PreemptiveCompactConfig = {
   enabled?: boolean
   threshold?: number
   cooldownMs?: number
   minTokens?: number
   showToast?: boolean
-  // 若為 true，觸發 preemptive compaction 前會嘗試用 PATCH /config 把
-  // opencode 內建的 compaction.auto 設為 false，避免內建 compaction 與本
-  // plugin 同時觸發造成 race。預設 false（不主動修改使用者的設定）。
+  // 若为 true，触发 preemptive compaction 前会用 PATCH /config 把
+  // opencode 内建 compaction.auto 设为 false，避免内建 compaction 与
+  // 本 plugin 同时触发造成 race。默认 false（不主动改动使用者设定）。
   disableBuiltinCompaction?: boolean
+  // 大于等于此值的 context 视为「大型 context」（如 1M Gemini），
+  // 用 largeContextThreshold；小于则视为「小型 context」，用
+  // smallContextThreshold。
+  largeContextBoundary?: number
+  largeContextThreshold?: number
+  smallContextThreshold?: number
 }
 
-type CompactionState = {
-  compactionInProgress: Set<string>
-  lastCompactionTime: Map<string, number>
-  contextLimits: Map<string, number>
-  providersFetchedAt: number
-  resolvedConfig: ResolvedConfig
-}
-
-type ResolvedConfig = {
+export type ResolvedConfig = {
   enabled: boolean
-  threshold: number
+  // undefined = 使用者未设定，依 context size 自动选择
+  threshold: number | undefined
   cooldownMs: number
   minTokens: number
   showToast: boolean
   disableBuiltinCompaction: boolean
+  largeContextBoundary: number
+  largeContextThreshold: number
+  smallContextThreshold: number
 }
 
-// ===== Log 設定 =====
+export type ShouldTriggerInput = {
+  totalTokens: number
+  contextLimit: number | undefined
+  config: ResolvedConfig
+  inCooldown: boolean
+  inProgress: boolean
+}
+
+export type ShouldTriggerResult =
+  | { trigger: true; threshold: number; ratio: number }
+  | { trigger: false; reason: "disabled" | "in_progress" | "in_cooldown" | "below_min_tokens" | "unknown_model" | "below_threshold"; ratio?: number; threshold?: number }
+
+// ============================================================
+// 纯函数（export 供测试）
+// ============================================================
+
+/**
+ * 把任意 metadata value 压成单行可读字符串。
+ * - null → "null"
+ * - undefined → "undefined"
+ * - string → 原样（不引号）
+ * - number / boolean → String(v)
+ * - object / array → JSON.stringify
+ */
+export function formatMetaValue(v: unknown): string {
+  if (v === null) return "null"
+  if (v === undefined) return "undefined"
+  if (typeof v === "string") return v
+  if (typeof v === "number" || typeof v === "boolean") return String(v)
+  // 物件 / 陣列：fallback 用 JSON.stringify 才能看出內容
+  return JSON.stringify(v)
+}
+
+/**
+ * 把 metadata 摊平成 ` key=value key=value` 形式。
+ * undefined / null / 非对象 / 空对象 → ""。
+ */
+export function formatMeta(meta: LogLayerMetadata | undefined): string {
+  if (!meta || typeof meta !== "object") return ""
+  const entries = Object.entries(meta as Record<string, unknown>)
+  if (entries.length === 0) return ""
+  return " " + entries.map(([k, v]) => `${k}=${formatMetaValue(v)}`).join(" ")
+}
+
+/**
+ * 把 n 限制在 [min, max]。min > max 时行为未定义（调用方负责）。
+ */
+export function clampNumber(n: number, min: number, max: number): number {
+  return Math.min(Math.max(n, min), max)
+}
+
+/**
+ * 核心：根据 context size 决定实际使用的阀值。
+ *
+ * - 使用者显式设定 config.threshold 时一律优先使用（向後相容）
+ * - 否则依 contextLimit vs config.largeContextBoundary 选
+ *   largeContextThreshold / smallContextThreshold
+ */
+export function resolveThreshold(contextLimit: number, config: ResolvedConfig): number {
+  if (config.threshold !== undefined) return config.threshold
+  if (contextLimit >= config.largeContextBoundary) {
+    return config.largeContextThreshold
+  }
+  return config.smallContextThreshold
+}
+
+/**
+ * 安全读取 raw config，null / undefined / 非对象 → 空 config。
+ * 数组也算非对象（避免后续 `.threshold` 等访问返回 undefined 链导致误判）。
+ */
+export function readPreemptiveCompactConfig(raw: unknown): PreemptiveCompactConfig {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {}
+  return raw as PreemptiveCompactConfig
+}
+
+/**
+ * 套用预设值并 clamp threshold。
+ * 注意：threshold 若使用者未设定则保留 undefined，由 resolveThreshold 决定。
+ */
+export function resolveConfig(raw: PreemptiveCompactConfig): ResolvedConfig {
+  const threshold =
+    typeof raw.threshold === "number"
+      ? clampNumber(raw.threshold, THRESHOLD_MIN, THRESHOLD_MAX)
+      : undefined
+  return {
+    enabled: raw.enabled !== false,
+    threshold,
+    cooldownMs:
+      typeof raw.cooldownMs === "number" ? raw.cooldownMs : DEFAULT_COOLDOWN_MS,
+    minTokens:
+      typeof raw.minTokens === "number" ? raw.minTokens : DEFAULT_MIN_TOKENS,
+    showToast: raw.showToast !== false,
+    // 默认关闭：只有使用者明确启用时才主动修改内建 compaction 设定
+    disableBuiltinCompaction: raw.disableBuiltinCompaction === true,
+    largeContextBoundary:
+      typeof raw.largeContextBoundary === "number"
+        ? raw.largeContextBoundary
+        : DEFAULT_LARGE_CONTEXT_BOUNDARY,
+    largeContextThreshold:
+      typeof raw.largeContextThreshold === "number"
+        ? raw.largeContextThreshold
+        : DEFAULT_LARGE_CONTEXT_THRESHOLD,
+    smallContextThreshold:
+      typeof raw.smallContextThreshold === "number"
+        ? raw.smallContextThreshold
+        : DEFAULT_SMALL_CONTEXT_THRESHOLD,
+  }
+}
+
+/**
+ * 把 provider 列表转成 `${providerID}/${modelID}` → contextLimit 的 Map。
+ * model 缺 limit.context 或 limit.context <= 0 会跳过。
+ */
+export function buildContextLimitMap(providers: Provider[]): Map<string, number> {
+  const map = new Map<string, number>()
+  for (const provider of providers) {
+    for (const [modelID, model] of Object.entries(provider.models ?? {})) {
+      const limit = model?.limit?.context
+      if (typeof limit === "number" && limit > 0) {
+        map.set(extractModelKey(provider.id, modelID), limit)
+      }
+    }
+  }
+  return map
+}
+
+/** 把 provider 与 model ID 包成查找用的 key。 */
+export function extractModelKey(providerID: string, modelID: string): string {
+  return `${providerID}/${modelID}`
+}
+
+/**
+ * 计算 (input + cache.read)。其他 token 计数（output、reasoning、
+ * cache.write）不参与 context 占用估算。
+ */
+export function computeUsageRatio(tokens: AssistantMessage["tokens"]): number {
+  const input = tokens.input ?? 0
+  const cacheRead = tokens.cache?.read ?? 0
+  return input + cacheRead
+}
+
+/** 类型守卫：info 是不是 AssistantMessage。 */
+export function isAssistantMessage(info: unknown): info is AssistantMessage {
+  return (
+    typeof info === "object" &&
+    info !== null &&
+    (info as { role?: unknown }).role === "assistant"
+  )
+}
+
+/**
+ * 整合所有 trigger 条件，输出结构化决策。**纯函数**：
+ * 状态（inCooldown / inProgress）已由 caller 算好传入；本函数只决定
+ * 触发与否与原因，不做副作用。
+ */
+export function shouldTrigger(input: ShouldTriggerInput): ShouldTriggerResult {
+  const { totalTokens, contextLimit, config, inCooldown, inProgress } = input
+
+  if (!config.enabled) {
+    return { trigger: false, reason: "disabled" }
+  }
+  if (inProgress) {
+    return { trigger: false, reason: "in_progress" }
+  }
+  if (inCooldown) {
+    return { trigger: false, reason: "in_cooldown" }
+  }
+  // 先用总 token 量做闸门：刚启动 / 短对话不必进入 ratio 计算
+  if (totalTokens < config.minTokens) {
+    return { trigger: false, reason: "below_min_tokens" }
+  }
+  if (contextLimit === undefined) {
+    return { trigger: false, reason: "unknown_model" }
+  }
+
+  const threshold = resolveThreshold(contextLimit, config)
+  const ratio = totalTokens / contextLimit
+  if (ratio < threshold) {
+    return { trigger: false, reason: "below_threshold", ratio, threshold }
+  }
+  return { trigger: true, threshold, ratio }
+}
+
+// ============================================================
+// Tracker 类（export 供测试）
+// ============================================================
+
+/**
+ * 包裝 lastCompactionTime Map + 可注入時鐘。
+ * 用 dep injection 的時鐘讓測試可控時間。
+ */
+export class CooldownTracker {
+  private readonly lastMarked = new Map<string, number>()
+  private readonly now: () => number
+
+  constructor(now: () => number = () => Date.now()) {
+    this.now = now
+  }
+
+  /** `now - lastMarked < cooldownMs` 才算冷卻中。從未 mark 過不算。 */
+  isInCooldown(sessionID: string, cooldownMs: number): boolean {
+    const last = this.lastMarked.get(sessionID)
+    if (last === undefined) return false
+    return this.now() - last < cooldownMs
+  }
+
+  /** 記錄 sessionID 當下時間作為冷卻起點。 */
+  markTriggered(sessionID: string): void {
+    this.lastMarked.set(sessionID, this.now())
+  }
+
+  /** 清掉 sessionID 的冷卻記錄（強制解除冷卻）。 */
+  clear(sessionID: string): void {
+    this.lastMarked.delete(sessionID)
+  }
+}
+
+/**
+ * 包裝 compactionInProgress Set，提供 atomic tryEnter / release。
+ * 設計目的：race-safe gate 確保兩個並發 message.updated 不會同時通過
+ * 檢查、各自啟動一次 summarize。
+ */
+export class InProgressTracker {
+  private readonly inProgress = new Set<string>()
+
+  /**
+   * 嘗試進入 sessionID 的「進行中」狀態。
+   * 回 true 表示成功（之前不在 progress 內），後續應在 finally 中 release。
+   * 回 false 表示已有別的流程在跑。
+   */
+  tryEnter(sessionID: string): boolean {
+    if (this.inProgress.has(sessionID)) return false
+    this.inProgress.add(sessionID)
+    return true
+  }
+
+  /** 釋放 sessionID 的「進行中」狀態。 */
+  release(sessionID: string): void {
+    this.inProgress.delete(sessionID)
+  }
+
+  /** 查詢是否仍在進行中（給 shouldTrigger 用）。 */
+  isInProgress(sessionID: string): boolean {
+    return this.inProgress.has(sessionID)
+  }
+}
+
+// ============================================================
+// Logger 設定（保留 loglayer + BlankTransport，延用原本格式）
+// ============================================================
 //
 // 寫入策略：用 loglayer + BlankTransport 自訂 shipToLogger，
 // 把每筆 log 用 appendFileSync 同步寫入 daily rotation 檔案。
@@ -80,25 +332,6 @@ function currentLogFile(): string {
   return path.join(LOG_DIR, `${SERVICE}-${date}.log`)
 }
 
-/** 把 metadata value 轉成單行字串（不 JSON.stringify，盡量保持人類可讀） */
-function formatMetaValue(v: unknown): string {
-  if (v === null) return "null"
-  if (v === undefined) return "undefined"
-  if (typeof v === "string") return v
-  if (typeof v === "number" || typeof v === "boolean") return String(v)
-  // 物件 / 陣列：fallback 用 JSON.stringify 才能看出內容；
-  // spec 不鼓勵 JSON.stringify，但對純量以外的值這是唯一可讀的選項。
-  return JSON.stringify(v)
-}
-
-/** 將 metadata object 攤平成 ` key=value` 形式（無 metadata 時回空字串） */
-function formatMeta(meta: LogLayerMetadata | undefined): string {
-  if (!meta || typeof meta !== "object") return ""
-  const entries = Object.entries(meta as Record<string, unknown>)
-  if (entries.length === 0) return ""
-  return " " + entries.map(([k, v]) => `${k}=${formatMetaValue(v)}`).join(" ")
-}
-
 /** 同步寫入一行 log；任何錯誤都吃掉，絕不從 hook 拋出 */
 function writeLogLine(
   level: string,
@@ -116,9 +349,7 @@ function writeLogLine(
   }
 }
 
-// Module-level singleton logger。每個 plugin 實例共用同一個 logger
-// （避免重複建立 LogLayer instance）。寫入是 sync，所以即使並發呼叫
-// 也只是順序 append 到同一個檔案，不會交錯。
+// Module-level singleton logger
 const logger = new LogLayer({
   transport: new BlankTransport({
     shipToLogger: ({ logLevel, messages, metadata }) => {
@@ -131,71 +362,28 @@ const logger = new LogLayer({
   }),
 })
 
-/** 便利 wrapper：呼叫對應 level method 並附帶 metadata */
-function logAt(
-  level: "debug" | "info" | "warn" | "error",
-  message: string,
-  meta?: Record<string, unknown>,
-): void {
-  try {
-    logger.withMetadata(meta ?? {})[level](message)
-  } catch {
-    // best-effort
-  }
-}
+// ============================================================
+// OpenCode client 包裝（內部用、不 export）
+// ============================================================
 
-function readPreemptiveCompactConfig(raw: unknown): PreemptiveCompactConfig {
-  if (!raw || typeof raw !== "object") return {}
-  return raw as PreemptiveCompactConfig
-}
-
-function resolveConfig(raw: PreemptiveCompactConfig): ResolvedConfig {
-  const threshold = typeof raw.threshold === "number" ? raw.threshold : DEFAULT_THRESHOLD
-  return {
-    enabled: raw.enabled !== false,
-    threshold: Math.min(Math.max(threshold, 0.1), 0.95),
-    cooldownMs: typeof raw.cooldownMs === "number" ? raw.cooldownMs : DEFAULT_COOLDOWN_MS,
-    minTokens: typeof raw.minTokens === "number" ? raw.minTokens : DEFAULT_MIN_TOKENS,
-    showToast: raw.showToast !== false,
-    // 預設關閉：只在使用者明確啟用時才會主動修改 opencode 的 compaction 設定。
-    disableBuiltinCompaction: raw.disableBuiltinCompaction === true,
-  }
-}
-
-function buildContextLimitMap(providers: Provider[]): Map<string, number> {
-  const map = new Map<string, number>()
-  for (const provider of providers) {
-    for (const [modelID, model] of Object.entries(provider.models ?? {})) {
-      const limit = (model as Model | undefined)?.limit?.context
-      if (typeof limit === "number" && limit > 0) {
-        map.set(`${provider.id}/${modelID}`, limit)
-      }
-    }
-  }
-  return map
-}
-
-function isAssistantMessage(info: unknown): info is AssistantMessage {
-  return (
-    typeof info === "object" &&
-    info !== null &&
-    (info as { role?: unknown }).role === "assistant"
-  )
-}
-
-function computeUsageRatio(tokens: AssistantMessage["tokens"]): number {
-  const input = tokens.input ?? 0
-  const cacheRead = tokens.cache?.read ?? 0
-  return input + cacheRead
+type PluginState = {
+  cooldown: CooldownTracker
+  inProgress: InProgressTracker
+  contextLimits: Map<string, number>
+  providersFetchedAt: number
+  resolvedConfig: ResolvedConfig
 }
 
 async function fetchContextLimits(
   client: PluginInput["client"],
-  state: CompactionState,
+  state: PluginState,
   directory: string,
 ): Promise<void> {
   const now = Date.now()
-  if (state.contextLimits.size > 0 && now - state.providersFetchedAt < PROVIDER_CACHE_REFRESH_MS) {
+  if (
+    state.contextLimits.size > 0 &&
+    now - state.providersFetchedAt < PROVIDER_CACHE_REFRESH_MS
+  ) {
     return
   }
 
@@ -208,13 +396,13 @@ async function fetchContextLimits(
     state.contextLimits = buildContextLimitMap(providers)
     state.providersFetchedAt = now
   } catch {
-    // Leave existing cache in place; first call just means we have no map yet.
+    // 保留旧 cache；第一次失败时 contextLimits 仍为空，shouldTrigger 会回 unknown_model
   }
 }
 
 async function loadConfig(
   client: PluginInput["client"],
-  state: CompactionState,
+  state: PluginState,
   directory: string,
 ): Promise<ResolvedConfig> {
   try {
@@ -222,22 +410,25 @@ async function loadConfig(
       query: { directory },
       throwOnError: true,
     })
-    const experimental = (response.data as { experimental?: { preemptive_compact?: unknown } } | undefined)
-      ?.experimental
+    const experimental = (
+      response.data as
+        | { experimental?: { preemptive_compact?: unknown } }
+        | undefined
+    )?.experimental
     const raw = readPreemptiveCompactConfig(experimental?.preemptive_compact)
     state.resolvedConfig = resolveConfig(raw)
   } catch {
-    // Keep the previously resolved config on transient failures.
+    // 暂时性失败时保留先前已解析的 config
   }
-  // 診斷 log：每次 resolve 都印一次目前生效的設定值，方便確認
-  // experimental.preemptive_compact 是否真的被讀到。
-  logAt("debug", "config loaded", {
-    enabled: state.resolvedConfig.enabled,
-    threshold: state.resolvedConfig.threshold,
-    minTokens: state.resolvedConfig.minTokens,
-    cooldownMs: state.resolvedConfig.cooldownMs,
-    disableBuiltinCompaction: state.resolvedConfig.disableBuiltinCompaction,
-  })
+  logger
+    .withMetadata({
+      enabled: state.resolvedConfig.enabled,
+      threshold: state.resolvedConfig.threshold,
+      minTokens: state.resolvedConfig.minTokens,
+      cooldownMs: state.resolvedConfig.cooldownMs,
+      disableBuiltinCompaction: state.resolvedConfig.disableBuiltinCompaction,
+    })
+    .debug("config loaded")
   return state.resolvedConfig
 }
 
@@ -261,158 +452,133 @@ async function showToast(
   }
 }
 
+// ============================================================
+// Plugin factory
+// ============================================================
+
 export const PreemptiveCompactPlugin: Plugin = async ({ client, directory, project }) => {
-  const state: CompactionState = {
-    compactionInProgress: new Set(),
-    lastCompactionTime: new Map(),
+  const state: PluginState = {
+    cooldown: new CooldownTracker(),
+    inProgress: new InProgressTracker(),
     contextLimits: new Map(),
     providersFetchedAt: 0,
     resolvedConfig: resolveConfig({}),
   }
 
-  // 診斷 log：確認 factory 有被 opencode 走到、有 client / project 可以用。
-  // 若完全沒看到這行，代表 plugin 沒被載入；plugin 載入後沒看到 "event received"
-  // 則代表 event hook 沒被註冊到。
-  logAt("info", "plugin initialized", {
-    directory,
-    projectID: project?.id ?? null,
-    hasClient: typeof client === "object" && client !== null,
-  })
+  logger
+    .withMetadata({
+      directory,
+      projectID: project?.id ?? null,
+      hasClient: typeof client === "object" && client !== null,
+    })
+    .info("plugin initialized")
 
-  // Prefetch in the background. Do not await here — plugin init runs while
-  // opencode is still bootstrapping, and blocking on client API calls deadlocks startup.
+  // 后台预载，不要 await — plugin 初始化时 opencode 还在 bootstrap，
+  // 等 client API 调用会 deadlock startup
   void loadConfig(client, state, directory)
   void fetchContextLimits(client, state, directory)
 
   return {
     event: async ({ event }) => {
-      // 診斷 log：所有 event 都印一筆，方便確認 event hook 真的有被呼叫、
-      // 以及是哪一類事件。debug 等級預設會被過濾掉，正式使用時不會太吵。
-      logAt("debug", "event received", { eventType: event.type })
+      logger.withMetadata({ eventType: event.type }).debug("event received")
 
       if (event.type !== "message.updated") return
       const info = event.properties.info
       if (!isAssistantMessage(info)) return
-      // 跳過訊息本身就出錯的情況（不需要 compact）。
+      // 跳過訊息本身就出錯的情況（不需要 compact）
       if (info.error) return
       // 跳過 opencode 內建 compaction 自己產生的 message，避免 compaction 結束後
-      // 又被本 plugin 看到而再次觸發，形成週期性 compact：
-      //   - summary === true: 該 message 是 compaction 的 summary 結果
-      //   - mode === "compaction": 該 message 是 compaction 過程中產生的
-      // （SDK v1 型別上沒有 `agent` 欄位，但 runtime 上 `mode === "compaction"`
-      // 與 `agent === "compaction"` 是同步設定的，所以用 mode 當過濾條件。）
+      // 又被本 plugin 看到而再次觸發，形成週期性 compact
       if (info.summary === true) return
       if (info.mode === "compaction") return
 
-      // 診斷 log：通過前置檢查後，記下這個 candidate message 的關鍵欄位，
-      // 方便日後排查「為什麼 trigger / 沒 trigger」。
-      logAt("debug", "checking message", {
-        sessionID: info.sessionID,
-        role: info.role,
-        providerID: info.providerID,
-        modelID: info.modelID,
-        mode: info.mode,
-        summary: info.summary ?? false,
-        error: null,
-        tokensInput: info.tokens.input,
-        tokensCacheRead: info.tokens.cache.read,
-        tokensSum: computeUsageRatio(info.tokens),
-      })
+      logger
+        .withMetadata({
+          sessionID: info.sessionID,
+          role: info.role,
+          providerID: info.providerID,
+          modelID: info.modelID,
+          mode: info.mode,
+          summary: info.summary ?? false,
+          tokensInput: info.tokens.input,
+          tokensCacheRead: info.tokens.cache.read,
+          tokensSum: computeUsageRatio(info.tokens),
+        })
+        .debug("checking message")
 
       const sessionID = info.sessionID
 
-      // Race-safe gate：has() 與 add() 之間不穿插任何 await，
-      // 確保兩個並發的 message.updated 不會同時通過檢查、各自啟動一次 summarize。
-      // （JS 是單執行緒，只要沒有 await，has 與 add 之間不會被插隊。）
-      if (state.compactionInProgress.has(sessionID)) {
-        logAt("debug", "skip: compaction in progress", { sessionID })
+      // Race-safe atomic gate（無 await 介入，不會被插隊）
+      if (!state.inProgress.tryEnter(sessionID)) {
+        logger.withMetadata({ sessionID }).debug("skip: compaction in progress")
         return
       }
-      state.compactionInProgress.add(sessionID)
 
       try {
         const config = await loadConfig(client, state, directory)
-        if (!config.enabled) return
-
-        const lastTriggered = state.lastCompactionTime.get(sessionID) ?? 0
-        const sinceLastMs = Date.now() - lastTriggered
-        if (sinceLastMs < config.cooldownMs) {
-          logAt("debug", "skip: cooldown active", {
-            sessionID,
-            sinceLastSec: Math.round(sinceLastMs / 1000),
-            cooldownMs: config.cooldownMs,
-          })
-          return
-        }
-
-        const totalTokens = computeUsageRatio(info.tokens)
-        if (totalTokens < config.minTokens) {
-          logAt("debug", "skip: below minTokens", {
-            sessionID,
-            totalTokens,
-            minTokens: config.minTokens,
-          })
-          return
-        }
+        const inCooldown = state.cooldown.isInCooldown(sessionID, config.cooldownMs)
 
         await fetchContextLimits(client, state, directory)
-        const contextLimit = state.contextLimits.get(`${info.providerID}/${info.modelID}`)
-        if (!contextLimit) {
-          logAt("debug", "skip: unknown model context limit", {
+        const contextLimit = state.contextLimits.get(
+          extractModelKey(info.providerID, info.modelID),
+        )
+        const totalTokens = computeUsageRatio(info.tokens)
+
+        const decision = shouldTrigger({
+          totalTokens,
+          contextLimit,
+          config,
+          inCooldown,
+          inProgress: false, // 已被 tryEnter 接住
+        })
+
+        if (!decision.trigger) {
+          logger
+            .withMetadata({
+              sessionID,
+              ratio: decision.ratio,
+              threshold: decision.threshold,
+            })
+            .debug(`skip: ${decision.reason}`)
+          return
+        }
+
+        const { ratio, threshold } = decision
+        const percent = Math.round(ratio * 100)
+        logger
+          .withMetadata({
             sessionID,
             providerID: info.providerID,
             modelID: info.modelID,
-          })
-          return
-        }
-
-        const ratio = totalTokens / contextLimit
-        if (ratio < config.threshold) {
-          logAt("debug", "skip: below threshold", {
-            sessionID,
+            totalTokens,
+            contextLimit,
             ratio: Number(ratio.toFixed(3)),
-            threshold: config.threshold,
+            threshold,
           })
-          return
-        }
+          .info("triggering preemptive compaction")
 
-        const percent = Math.round(ratio * 100)
-        logAt("info", "triggering preemptive compaction", {
-          sessionID,
-          providerID: info.providerID,
-          modelID: info.modelID,
-          totalTokens,
-          contextLimit,
-          ratio: Number(ratio.toFixed(3)),
-          threshold: config.threshold,
-        })
-
-        // 與內建 compaction 的互動：若使用者啟用 disableBuiltinCompaction，
-        // 嘗試 PATCH /config 把 compaction.auto 設為 false，避免 race。
-        // 預設關閉，改用 warning log 提醒使用者在 opencode.jsonc 設定。
-        // （config.update 的 body 型別來自 SDK v1 的 Config，沒有 `compaction`
-        //  欄位；用 `as never` 繞過型別檢查，server 端實際上接受。）
+        // 與內建 compaction 的互動
         if (config.disableBuiltinCompaction) {
           try {
             await client.config.update({
               query: { directory },
               body: { compaction: { auto: false } } as never,
             })
-            logAt("info", "disabled built-in compaction via config.update", {
-              sessionID,
-            })
+            logger.withMetadata({ sessionID }).info("disabled built-in compaction via config.update")
           } catch (error) {
-            logAt("warn", "failed to disable built-in compaction", {
-              sessionID,
-              error: error instanceof Error ? error.message : String(error),
-            })
+            logger
+              .withMetadata({
+                sessionID,
+                error: error instanceof Error ? error.message : String(error),
+              })
+              .warn("failed to disable built-in compaction")
           }
         } else {
-          logAt(
-            "warn",
-            "built-in compaction may also trigger; set compaction.auto=false in opencode.jsonc or enable disableBuiltinCompaction",
-            { sessionID },
-          )
+          logger
+            .withMetadata({ sessionID })
+            .warn(
+              "built-in compaction may also trigger; set compaction.auto=false in opencode.jsonc or enable disableBuiltinCompaction",
+            )
         }
 
         if (config.showToast) {
@@ -430,20 +596,19 @@ export const PreemptiveCompactPlugin: Plugin = async ({ client, directory, proje
             query: { directory },
           })
         } catch (error) {
-          logAt("warn", "preemptive compaction failed", {
-            sessionID,
-            error: error instanceof Error ? error.message : String(error),
-          })
+          logger
+            .withMetadata({
+              sessionID,
+              error: error instanceof Error ? error.message : String(error),
+            })
+            .warn("preemptive compaction failed")
         } finally {
-          // Cooldown 從「summarize 開始前」改到「summarize 結束後」，
-          // 避免 summarize 跑超過 cooldownMs（例如 60s）時，新進的 message.updated
-          // 再次通過 cooldown 檢查、啟動第二次 summarize。
-          state.lastCompactionTime.set(sessionID, Date.now())
+          // Cooldown 從 summarize 結束後才開始算，避免 summarize 跑超過
+          // cooldownMs 時新進的 message.updated 又啟動第二次
+          state.cooldown.markTriggered(sessionID)
         }
       } finally {
-        // 無論結果（成功 / 失敗 / 提前 return）都要釋放 slot，
-        // 讓下一個 message.updated 可以重新進入檢查流程。
-        state.compactionInProgress.delete(sessionID)
+        state.inProgress.release(sessionID)
       }
     },
   }
