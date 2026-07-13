@@ -1,0 +1,17 @@
+# Oh My Pi 執行期資料（不追蹤）
+# 只追蹤 agent/config.yml 與 agent/last-changelog-version
+
+# 硬體/系統快取
+gpu_cache.json
+
+# SQLite 資料庫與 WAL
+*.db
+*.db-shm
+*.db-wal
+
+# Session 紀錄
+agent/sessions/
+agent/terminal-sessions/
+
+# 執行日誌
+logs/
