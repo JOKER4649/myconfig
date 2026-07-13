@@ -2,7 +2,6 @@
 *.pyc
 
 # agent
-.omo/
 .agent/
 
 # herdr 安裝的整合檔（自動生成，不應手動追蹤）

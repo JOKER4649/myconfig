@@ -30,20 +30,13 @@ note: |
     (原版「不推理」過嚴,跟「圖表趨勢」範例衝突)。
   - 目標驅動:goal 決定解釋重點;goal 模糊時不猜,FAIL。
   - 只支援檔案路徑:task tool 不能直接傳 image data,呼叫者要先存成檔案。
-  - 與 oh-my-openagent multimodal-looker 的差異(重要):
-    * oh-my-openagent 用 plugin 的 look_at 工具 + 獨立 session 實現,主模型本來就
-      能讀圖,look_at 只是「快速摘要」替代 read。我們的場景是主模型可能根本沒有
-      多模態能力,vision 是「補能力」,不是「加速」—— 因此 confidence / limitations
-      結構更嚴謹,且必須用 read 自己讀取(不是替代 read)。
-
   為什麼不做跨檔比較:
   - 多檔同一 session 時,goal 與檔案的對應關係容易錯亂;拆解並行更可預測。
   - 主 agent 收 N 個 vision 結果後自己合成,跟 explore「單一研究方向」設計對齊。
   - 若未來發現跨檔比較是高頻需求,可考慮放寬(但目前不開放)。
 
   為什麼用 MiniMax-M3 而不指定 variant:
-  - oh-my-openagent 的 multimodal-looker 配置用此模型且不指定 variant,視覺任務用
-    預設 variant 較保險;且用戶明確指定此模型。
+  - 用戶明確指定此模型;視覺任務用預設 variant 較保險。
   - 目前 opencode 無內建 fallback 機制,模型失敗 / 限流時由呼叫者重派(可考慮換
     其他視覺模型或交給 @oracle 從既有文字資訊推理)。
 

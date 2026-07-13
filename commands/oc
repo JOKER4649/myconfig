@@ -192,9 +192,7 @@ def main() -> None:
 
     set_terminal_title(title)
     rename_zellij_tab(title)
-
-    # oh-my-opencode-slim multiplexer 需要 OPENCODE_PORT 與 --port 一致
-    # 詳見: https://github.com/anomalyco/opencode/issues/9099
+    # OPENCODE_PORT 需與 --port 一致（slim multiplexer / portless proxy 場景）
     os.environ["OPENCODE_PORT"] = str(port)
 
     # 預設直接執行 opencode；OC_USE_TMUX=1 時才包進 tmux session

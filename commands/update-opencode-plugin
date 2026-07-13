@@ -113,8 +113,7 @@ def is_local_path(spec: str) -> bool:
     )
 
 
-def is_version_dir(name: str) -> bool:
-    """判斷 `oh-my-openagent@4.0.0` 這種具體版號目錄（不是 `@latest`）。
+    """判斷 `<name>@<ver>` 這種具體版號目錄（不是 `@latest`）。
 
       - scoped 外層（首字節 @）不在這裡處理（呼叫端自己分流）
       - 必須含 `@`、版本段只含合法字元
@@ -407,8 +406,7 @@ def main(
         bool,
         typer.Option(
             "-c",
-            "--clean-old",
-            help="順便清除舊版號快取目錄（oh-my-openagent@4.0.0 之類）",
+            help="順便清除舊版號快取目錄（<name>@<ver>）",
         ),
     ] = False,
     no_install: Annotated[

@@ -1,6 +1,5 @@
 // ============================================================
 // Auto Compact Plugin — 上下文达阀值时自动压缩并继续
-// 参考 oh-my-openagent preemptive-compaction 实现
 // ============================================================
 import type { Plugin, PluginInput } from "@opencode-ai/plugin"
 import type { AssistantMessage, Provider } from "@opencode-ai/sdk"
