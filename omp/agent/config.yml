@@ -7,10 +7,13 @@ setupVersion: 1
 modelRoles: 
   default: minimax-code/MiniMax-M3
   smol: opencode-go/deepseek-v4-flash
-  slow: openai-codex/gpt-5.6-sol:high
+  slow: openai-codex/gpt-5.6-terra:high
   vision: minimax-code/MiniMax-M3
   plan: opencode-go/deepseek-v4-pro:high
-  advisor: openai-codex/gpt-5.6-sol:high
-defaultThinkingLevel: high
-contextPromotion: 
-  enabled: false
+  advisor: opencode-go/deepseek-v4-pro
+  commit: opencode-go/deepseek-v4-flash
+  task: minimax-code/MiniMax-M3
+advisor: 
+  enabled: true
+  syncBacklog: "off"
+  immuneTurns: 5
