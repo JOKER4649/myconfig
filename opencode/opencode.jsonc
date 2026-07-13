@@ -14,6 +14,9 @@
       "explore": "allow",
       "vision": "allow",
     },
+    "external_directory": {
+      "/tmp/*": "allow"
+    },
     // 僅主模型可使用記憶工具
     "memory_*": "deny",
     // 僅 @query agent 可使用網路搜尋工具
@@ -23,7 +26,7 @@
   },
   "agent": {
     "plan": { "disable": true },
-    "build": { "disable": false },
+    "build": { "disable": true },
     "general": { "disable": true },
     "compaction": {
       "model": "minimax-coding-plan/MiniMax-M3",

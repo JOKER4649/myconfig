@@ -218,3 +218,6 @@ export PATH=/home/joker/.opencode/bin:$PATH
 opencode() {
   OPENCODE_CONFIG_DIR="$HOME/myconfig/opencode-local" command opencode "$@"
 }
+
+# bun completions
+[ -s "/home/joker/.bun/_bun" ] && source "/home/joker/.bun/_bun"
