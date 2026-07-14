@@ -13,7 +13,11 @@ modelRoles:
   advisor: opencode-go/deepseek-v4-pro
   commit: opencode-go/deepseek-v4-flash
   task: minimax-code/MiniMax-M3
+  tiny: opencode-go/deepseek-v4-flash
 advisor: 
   enabled: true
   syncBacklog: "off"
   immuneTurns: 5
+hideThinkingBlock: true
+github: 
+  enabled: true
