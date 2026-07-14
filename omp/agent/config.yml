@@ -7,17 +7,37 @@ setupVersion: 1
 modelRoles: 
   default: minimax-code/MiniMax-M3
   smol: opencode-go/deepseek-v4-flash
-  slow: openai-codex/gpt-5.6-terra:high
+  slow: kilo/neuralwatt/glm-5.2
   vision: minimax-code/MiniMax-M3
   plan: opencode-go/deepseek-v4-pro:high
-  advisor: opencode-go/deepseek-v4-pro
+  advisor: minimax-code/MiniMax-M3
   commit: opencode-go/deepseek-v4-flash
   task: minimax-code/MiniMax-M3
   tiny: opencode-go/deepseek-v4-flash
+  designer: minimax-code/MiniMax-M3
+  DEEP: openai-codex/gpt-5.6-terra:high
 advisor: 
   enabled: true
-  syncBacklog: "off"
+  syncBacklog: "1"
   immuneTurns: 5
 hideThinkingBlock: true
 github: 
   enabled: true
+defaultThinkingLevel: auto
+cycleOrder: 
+  - default
+  - slow
+  - DEEP
+colorBlindMode: false
+display: 
+  shimmer: classic
+  showTokenUsage: true
+task: 
+  eager: preferred
+  isolation: 
+    mode: auto
+    commits: ai
+commands: 
+  enableOpencodeUser: false
+edit: 
+  mode: apply_patch
