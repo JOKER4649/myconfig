@@ -1,5 +1,8 @@
 # Oh My Pi 執行期資料（不追蹤）
-# 只追蹤 agent/config.yml 與 agent/last-changelog-version
+# 只追蹤 agent/config.yml
+
+# 上次讀過的 changelog 版本（每台機器各自維護，跨機器無意義）
+agent/last-changelog-version
 
 # 硬體/系統快取
 gpu_cache.json
