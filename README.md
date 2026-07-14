@@ -24,7 +24,7 @@
 | `worktrunk/` | [Worktrunk](https://worktrunk.dev) git worktree 管理工具設定 |
 | `agents/` | [OpenCode Skills](https://opencode.ai/docs/skills) ── 使用者安裝的 agent skills |
 | `curl/` | [curl](https://curl.se) 全局設定（預設啟用 `.netrc` 認證） |
-| `omp/` | [Oh My Pi](https://github.com/) AI agent 設定（`~/.omp` symlink，僅追蹤 `agent/config.yml`） |
+| `omp/` | [Oh My Pi](https://github.com/) AI agent 設定（`~/.omp` symlink，追蹤 `agent/config.yml` + `agent/models.yml`） |
 
 
 ## mise 自訂插件
@@ -47,6 +47,29 @@ mise plugins link cursor-agent ~/myconfig/mise/plugins/cursor-agent
 
 建立以工具名稱命名的新子目錄，將設定檔放入其中。若有需要排除的檔案，在子目錄內建立 `.gitignore`。
 
+
+## Oh My Pi 自訂模型提供者
+
+`omp/agent/models.yml` 新增 user-defined provider，以 OpenAI 相容介面接入任意 `baseUrl`。
+目前包含 [NeuralWatt](https://neuralwatt.com) 11 個模型（GLM-5.2 / Qwen3.5-397B / Qwen3.6-35B / Kimi K2.6-K2.7 family）。
+
+Credential 走 `resolveConfigValue()`：欄位值會先查 `process.env[<apiKey>]`，查不到才當字面常數。
+所以 `models.yml` 內只放變數名（見下），secret 仍由環境變數提供。
+
+首次在新機器使用前：
+
+```bash
+export NEURALWATT_API_KEY=sk-...   # 從 https://neuralwatt.com 取得
+omp --model neuralwatt/qwen3.6-35b-fast -p 'hi'
+```
+
+要把 key 放進 keychain（或 prompt-time 動態詢問），把 `models.yml` 內 `apiKey: NEURALWATT_API_KEY` 改為 `apiKey: '!op read op://Personal/neuralwatt/api-key'`（以 `!` 開頭會當 shell 命令執行，stdout 當 key，結果會快取）。
+
+要更新定價或 context window 限制，從 API 重新拉即可：
+
+```bash
+curl -s https://api.neuralwatt.com/v1/models | jq '.data[] | {id, ctx: .metadata.limits.max_context_length, pricing: .metadata.pricing}'
+```
 ## SSH TERM 策略
 
 Kitty 會把本機 `TERM` 設成 `xterm-kitty`，但許多遠端主機沒有對應 terminfo。`zsh/.zshrc` 內的 `ssh()` / `gcloud compute ssh` wrapper 採用以下策略：
