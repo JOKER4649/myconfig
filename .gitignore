@@ -21,6 +21,11 @@ agents/skills/using-git-worktrees
 agents/skills/verification-before-completion
 agents/skills/writing-plans
 agents/skills/writing-skills
+opencode/skills/brainstorming
+
+# Python 工具自動產生的快取
+.mypy_cache/
+.ruff_cache/
 
 # 手動歸檔的非 git 檔案（mv 進來待清理）
 .delete/
