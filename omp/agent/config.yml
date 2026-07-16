@@ -5,39 +5,101 @@ theme:
   dark: titanium
 setupVersion: 1
 modelRoles: 
-  default: minimax-code/MiniMax-M3
-  smol: opencode-go/deepseek-v4-flash
-  slow: kilo/neuralwatt/glm-5.2
+  default: kilo/neuralwatt/glm-5.2-short
+  smol: minimax-code/MiniMax-M3
+  slow: openai-codex/gpt-5.6-sol:high
   vision: minimax-code/MiniMax-M3
   plan: opencode-go/deepseek-v4-pro:high
   advisor: minimax-code/MiniMax-M3
   commit: opencode-go/deepseek-v4-flash
-  task: minimax-code/MiniMax-M3
+  task: openai-codex/gpt-5.6-luna:high
   tiny: opencode-go/deepseek-v4-flash
   designer: minimax-code/MiniMax-M3
-  DEEP: openai-codex/gpt-5.6-terra:high
+  default2: openai-codex/gpt-5.6-terra:high
 advisor: 
-  enabled: true
+  enabled: false
   syncBacklog: "1"
   immuneTurns: 5
-hideThinkingBlock: true
+hideThinkingBlock: false
 github: 
   enabled: true
 defaultThinkingLevel: auto
 cycleOrder: 
+  - smol
   - default
+  - default2
   - slow
-  - DEEP
 colorBlindMode: false
 display: 
   shimmer: classic
-  showTokenUsage: true
+  showTokenUsage: false
 task: 
   eager: preferred
   isolation: 
     mode: auto
-    commits: ai
+    commits: generic
+    merge: patch
 commands: 
-  enableOpencodeUser: false
+  enableOpencodeUser: true
 edit: 
-  mode: apply_patch
+  mode: hashline
+disabledExtensions: 
+  - rule:rs-lazylock
+  - rule:rs-match-ergonomics
+  - rule:rs-parking-lot
+  - rule:rs-result-type
+  - rule:go-add-cleanup
+  - rule:go-bench-loop
+  - rule:go-exp-promoted
+  - rule:go-ioutil
+  - rule:go-join-hostport
+  - rule:go-new-expr
+  - rule:go-rand-v2
+  - rule:go-range-int
+  - rule:rs-box-leak
+  - rule:rs-future-prelude
+browser: 
+  headless: true
+  enabled: true
+compaction: 
+  strategy: snapcompact
+  thresholdPercent: 60
+  thresholdTokens: 200000
+  handoffSaveToDisk: false
+exa: 
+  enableResearcher: false
+textVerbosity: medium
+tier: 
+  openai: none
+personality: default
+interruptMode: immediate
+contextPromotion: 
+  enabled: false
+branchSummary: 
+  enabled: false
+memory: 
+  backend: hindsight
+hindsight: 
+  bankId: default
+lsp: 
+  formatOnWrite: true
+debug: 
+  enabled: true
+secrets: 
+  enabled: false
+todo: 
+  reminders: true
+bashInterceptor: 
+  enabled: false
+shellMinimizer: 
+  sourceOutlineLevel: default
+dev: 
+  autoqa: 
+    consent: granted
+statusLine: 
+  preset: full
+  sessionAccent: true
+  transparent: false
+  compactThinkingLevel: false
+terminal: 
+  showProgress: false
