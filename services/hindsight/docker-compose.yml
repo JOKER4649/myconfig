@@ -8,26 +8,24 @@
 #     相同，pg_dump / pg_restore round-trip 乾淨。
 #   * Port 8888 是上游 API 預設。
 #
-# Embedding 走本地 TEI (Text Embeddings Inference) sidecar 跑 BAAI/bge-m3
+# Embedding 走雲端 OpenRouter 跑 BAAI/bge-m3
 # （1024-dim, 100+ 語言, 中文涵蓋比 text-embedding-3-small 好）：
-#   * TEI 是上游官方推薦的 sidecar provider（docker-compose 的 custom-models
-#     範例也用 TEI）
-#   * TEI 沒 expose host port；只在 compose default network 內互通
+#   * OPENROUTER_API_KEY 放在 .env，container 直接吃 host var
 #   * bge-m3 是 1024-dim，切換後舊 vector 會被清掉、schema 重建為 1024
 #   * 為什麼不用 hindsight `latest` (full) image 的 bundled embedder：
 #     local provider 只支援 bge-small-en-v1.5 (英文, 384-dim) 和
 #     paraphrase-multilingual-MiniLM-L12-v2 (多語言, 384-dim)，沒有 bge-m3
 #
-# 想切回雲端 OpenRouter (openai/text-embedding-3-small, 1536-dim)：
-#   1. 把 `hindsight.environment` 內的 embedding 三行還原成下面
-#      「之前的 OpenRouter 配置」那段（解除註解）
-#   2. 註解掉 / 刪掉 `tei` service、並從 `hindsight.depends_on` 拿掉 tei
-#   3. .env 裡的 OPENROUTER_API_KEY 留著（之後切回去還能用）
+# 想切回本地 TEI sidecar (BAAI/bge-m3, CPU)：
+#   1. 把 `hindsight.environment` 內的 embedding 三行換成
+#      HINDSIGHT_API_EMBEDDINGS_PROVIDER: tei
+#      HINDSIGHT_API_EMBEDDINGS_TEI_URL: http://tei:80
+#   2. 恢復 `tei` service（跑 ghcr.io/huggingface/text-embeddings-inference）
+#      並在 `hindsight.depends_on` 加回 tei: condition: service_healthy
+#   3. ./tei_data 是 TEI model cache（HF hub 格式, bge-m3 ~2.3GB）
 #
 # 路徑備註（本檔位於 hindsight/docker-compose.yml）：
 #   * `./pg_data` 是 postgres 資料目錄，由本 stack 擁有。
-#   * `./tei_data` 是 TEI model cache（HF hub 格式，第一次跑下載 ~2.3GB
-#     bge-m3 weights；後續 restart 直接 hit cache）。
 #   * `volumes:` 裡的相對路徑都從「本檔所在目錄」解析，這是根 `include:`
 #     讓每個 stack 自給自足的關鍵。
 #
@@ -50,29 +48,6 @@ services:
       retries: 5
       start_period: 20s
 
-  tei:
-    # BAAI/bge-m3 (CPU variant — 這台沒獨顯)。
-    #   * --max-batch-tokens 8192: bge-m3 context 8K；預設 65536 多吃 ~2GB
-    #   * --max-client-batch 32: 避免單 client 壟斷 batch slot
-    #   * --pooling cls: BAAI 原作者推薦 CLS pooling
-    image: ghcr.io/huggingface/text-embeddings-inference:${HINDSIGHT_TEI_VERSION:-cpu-1.9}
-    restart: unless-stopped
-    command:
-      - "--model-id=BAAI/bge-m3"
-      - "--max-batch-tokens=8192"
-      - "--max-client-batch-size=32"
-      - "--pooling=cls"
-      - "--dtype=float32"
-    volumes:
-      - ./tei_data:/data
-    healthcheck:
-      # start_period 300s 涵蓋 cold start ~2.3GB model download + warmup
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:80/health || exit 1"]
-      interval: 15s
-      timeout: 10s
-      retries: 5
-      start_period: 300s
-
   hindsight:
     image: ghcr.io/vectorize-io/hindsight:${HINDSIGHT_VERSION:-latest-slim}
     # slim image 的 venv 沒包 flashrank (optional rerank backend)。
@@ -83,8 +58,6 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      tei:
-        condition: service_healthy
     environment:
       # 官方 image 直接讀 HINDSIGHT_API_LLM_API_KEY；host .env 用的是
       # HINDSIGHT_LLM_API_KEY（沒 infix）— 顯式 map 過去。
@@ -93,15 +66,11 @@ services:
       HINDSIGHT_API_LLM_MODEL: ${HINDSIGHT_LLM_MODEL:-MiniMax-M3}
       HINDSIGHT_API_DATABASE_URL: postgresql://${HINDSIGHT_DB_USER:-hindsight}:${HINDSIGHT_DB_PASSWORD:?HINDSIGHT_DB_PASSWORD must be set in .env}@db:5432/${HINDSIGHT_DB_NAME:-hindsight}
 
-      # 走本地 TEI sidecar (上面的 tei service 跑 BAAI/bge-m3)
-      HINDSIGHT_API_EMBEDDINGS_PROVIDER: tei
-      HINDSIGHT_API_EMBEDDINGS_TEI_URL: http://tei:80
-
-      # 想切回雲端 OpenRouter 時：註解上面兩行、解除下面這段，
-      # 並移除 tei service + depends_on 對 tei：
-      # HINDSIGHT_API_EMBEDDINGS_PROVIDER: openrouter
-      # HINDSIGHT_API_EMBEDDINGS_OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
-      # HINDSIGHT_API_EMBEDDINGS_OPENROUTER_MODEL: ${HINDSIGHT_EMBEDDINGS_MODEL:-openai/text-embedding-3-small}
+      # 走雲端 OpenRouter 跑 baai/bge-m3 (1024-dim, 100+ 語言, 中文涵蓋
+      # 比 text-embedding-3-small 好)；不用本地 TEI sidecar。
+      HINDSIGHT_API_EMBEDDINGS_PROVIDER: openrouter
+      HINDSIGHT_API_EMBEDDINGS_OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      HINDSIGHT_API_EMBEDDINGS_OPENROUTER_MODEL: ${HINDSIGHT_EMBEDDINGS_MODEL:-baai/bge-m3}
 
       # flashrank — ONNX 為基礎、隨 image 內建、不需外部 API key。
       # 多語言涵蓋比 Cohere rerank-multilingual-v3 弱，但對中英混雜內容
@@ -110,7 +79,7 @@ services:
 
       # Control Plane (http://127.0.0.1:9999) 的 access key。
       # image 沒 baked 這個 var,沒顯式 map 就不會進 container,UI 會完全 open。
-      HINDSIGHT_CP_ACCESS_KEY: ${HINDSIGHT_CP_ACCESS_KEY:?HINDSIGHT_CP_ACCESS_KEY must be set in .env}
+      #HINDSIGHT_CP_ACCESS_KEY: ${HINDSIGHT_CP_ACCESS_KEY:?HINDSIGHT_CP_ACCESS_KEY must be set in .env}
     ports:
       - "127.0.0.1:8888:8888"
       - "127.0.0.1:9999:9999"
