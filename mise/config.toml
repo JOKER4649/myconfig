@@ -4,7 +4,6 @@ bun = "latest"
 gcloud = 'latest'
 github-cli = 'latest'
 "npm:@antfu/ni" = "latest"
-pnpm = 'latest'
 "pipx:httpie" = "latest"
 python = "3.14"
 uv = "latest"
